@@ -73,6 +73,12 @@ task_history(id, task_id, user_id, field, old_value, new_value, created_at)  -- 
 
 Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignments(user_id) WHERE ended_at IS NULL, team_members(user_id) WHERE ended_at IS NULL.
 
+## Veri tipi ve durum kararları
+- projects.status değerleri: 'active', 'done', 'archived' (varsayılan 'active').
+- Gün bilgisi alanları (tasks.due_date, projects.start_date, projects.due_date, teams.term_start, teams.term_end) `date` tipindedir; saat anı değil, takvim günüdür.
+- Olay zamanları (created_at, started_at, ended_at, completed_at, last_activity_at, deleted_at) `timestamptz` tipindedir.
+- task_assignments: source='assigned' ise assigned_by dolu olmalı; source='claimed' ise assigned_by boş olmalı (CHECK: `(source = 'assigned') = (assigned_by IS NOT NULL)`).
+
 ## İş kuralları
 - Havuz = needs_assignee = true AND status <> 'done' AND deleted_at IS NULL AND aktif 'owner' ataması yok. Havuz ayrı tablo değil, bir sorgu/görünüm.
 - Üstlen: kişiye aktif 'owner' ataması oluşturur (source='claimed').
