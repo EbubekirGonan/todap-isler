@@ -44,7 +44,9 @@ Sadece üyelere (şimdilik):
 6. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
 
 Diğer ekranlar:
-- Görev detayı: başlık, ekip/proje, üst iş, termin, durum (planlama aşamasında / işlemde / bitmek üzere / bitti), tahmini gerekli kişi sayısı, katkı sağlayanlar ve destekçiler, açıklama, yorumlar. Eylemler: "Katkı sağlarım" / "Bırakmak durumundayım", "Destek atabilirim" ve "İşlemler" menüsü (Düzenle, Başkasına ata). "Düzenle" aynı ekranda form açar (başlık, açıklama, tahmini kişi sayısı); ayrı pencere açılmaz.
+- Kart: son tarih ("Son tarih: gg.aa.yyyy") varsa görünür; katkı sayısı "sahiplenen/tahmin" biçimindedir. Ara hedef tarihi şimdilik ekranlarda gösterilmez.
+- Görev detayı: önce salt okunur görünüm açılır. Başlık, ekip/proje, üst iş, son tarih, durum (planlama aşamasında / işlemde / bitmek üzere / bitti), tahmini gerekli kişi sayısı, "Katkı Sağlarım: sahiplenen/tahmin" ve destekçiler, açıklama, yorumlar. Eylemler: "Katkı sağlarım", "Destek atabilirim" (her ikisi onay ister) ve "İşlemler" menüsü (Düzenle, Başkasına ata, Bırakmak durumundayım; bırakma onay ister). Menü dış tıklama ve Escape ile kapanır.
+- Düzenle: İşlemler menüsünden aynı ekranda form açar (durum, başlık, açıklama, tahmini kişi sayısı, son tarih); ayrı pencere açılmaz. Kaydet, "Değişiklikleri kaydetmek istediğinize emin misiniz?" onayından sonra kaydeder ve görünüm moduna döner. Vazgeçilirse düzenleme açık kalır, hiçbir şey kaydedilmez.
 - Görev ekleme: sadece başlık zorunlu. Opsiyonel: proje, ekip, termin, "Tahmini Gerekli Kişi Sayısı" (boş bırakılırsa 1).
 
 ## Veri modeli (başlangıç)
@@ -66,7 +68,7 @@ team_members(id, team_id, user_id, role_title, started_at, ended_at)
 projects(id, name, description, status, start_date, due_date, team_id NULL, created_by, created_at)
 
 tasks(id, project_id NULL, team_id NULL, parent_task_id NULL, title, description,
-      status ['planning' | 'in_progress' | 'nearly_done' | 'done'] default 'planning', due_date NULL, completed_at NULL,
+      status ['planning' | 'in_progress' | 'nearly_done' | 'done'] default 'planning', due_date NULL, target_date NULL, completed_at NULL,
       estimated_people integer default 1 (1..50),
       created_by, created_at, updated_at, last_activity_at, deleted_at NULL)
 
@@ -81,7 +83,8 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 
 ## Veri tipi ve durum kararları
 - projects.status değerleri: 'active', 'done', 'archived' (varsayılan 'active').
-- Gün bilgisi alanları (tasks.due_date, projects.start_date, projects.due_date, teams.term_start, teams.term_end) `date` tipindedir; saat anı değil, takvim günüdür.
+- tasks.target_date (ara hedef tarihi): migration `1794300000000_task-target-date` ile eklendi. API'de kabul edilir ve döner, ancak arayüzde şimdilik gösterilmez. Kolon kaldırılmaz.
+- Gün bilgisi alanları (tasks.due_date, tasks.target_date, projects.start_date, projects.due_date, teams.term_start, teams.term_end) `date` tipindedir; saat anı değil, takvim günüdür.
 - Olay zamanları (created_at, started_at, ended_at, completed_at, last_activity_at, deleted_at) `timestamptz` tipindedir.
 - task_assignments: source='assigned' ise assigned_by dolu olmalı; source='claimed' ise assigned_by boş olmalı (CHECK: `(source = 'assigned') = (assigned_by IS NOT NULL)`).
 

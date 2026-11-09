@@ -227,6 +227,25 @@ describe("havuz ve üstlenme", () => {
     assert.equal(ownerEntries[1].old_value, "Burak");
   });
 
+  test("ara hedef tarihi oluşturulur, güncellenir ve geçmişe kaydedilir", async () => {
+    const taskId = await createTask(alice, { targetDate: "2026-12-01" });
+    const created = (await (await api("GET", `/api/tasks/${taskId}`, alice)).json()) as {
+      task: { targetDate: string | null; dueDate: string | null };
+    };
+    assert.equal(created.task.targetDate, "2026-12-01");
+    assert.equal(created.task.dueDate, null);
+
+    assert.equal(
+      (await api("PATCH", `/api/tasks/${taskId}`, alice, { targetDate: "2026-12-15" })).status,
+      200,
+    );
+    const updated = (await (await api("GET", `/api/tasks/${taskId}`, alice)).json()) as {
+      task: { targetDate: string | null; history: { field: string }[] };
+    };
+    assert.equal(updated.task.targetDate, "2026-12-15");
+    assert.ok(updated.task.history.some((h) => h.field === "target_date"));
+  });
+
   test("ekibe özel görevde ekip dışındaki kişiye atama 400 döner", async () => {
     const outsider = await createUser("Disari");
     const taskId = await createTask(alice, { teamId: teamB, teamOnly: true });

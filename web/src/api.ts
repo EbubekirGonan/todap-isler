@@ -100,6 +100,7 @@ export type Task = {
   description: string | null;
   status: TaskStatus;
   dueDate: string | null;
+  targetDate: string | null;
   estimatedPeople: number;
   parentTaskId: string | null;
   parentTitle: string | null;
@@ -144,6 +145,7 @@ export type NewTask = {
   teamId: string | null;
   teamOnly: boolean;
   estimatedPeople: number | null;
+  dueDate: string | null;
 };
 
 export async function listMyTasks(): Promise<Task[]> {
@@ -181,6 +183,8 @@ export type TaskPatch = {
   title?: string;
   description?: string | null;
   status?: TaskStatus;
+  dueDate?: string | null;
+  targetDate?: string | null;
   estimatedPeople?: number;
 };
 

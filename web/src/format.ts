@@ -19,10 +19,22 @@ const HISTORY_LABELS: Record<string, string> = {
   estimated_people: 'Tahmini kişi sayısını değiştirdi',
   description: 'Açıklamayı değiştirdi',
   due_date: 'Son tarihi değiştirdi',
+  target_date: 'Ara hedef tarihini değiştirdi',
 };
 
 export function historyLabel(field: string): string {
   return HISTORY_LABELS[field] ?? field;
+}
+
+// Tarih alanı (YYYY-MM-DD) saat dilimi kaymadan gün.ay.yıl olarak gösterilir.
+export function formatDateOnly(value: string): string {
+  const [year, month, day] = value.split('-');
+  return `${day}.${month}.${year}`;
+}
+
+// Kartta gösterilecek son tarih etiketi; tarih yoksa null döner.
+export function dueDateLabel(task: { dueDate: string | null }): string | null {
+  return task.dueDate ? `Son tarih: ${formatDateOnly(task.dueDate)}` : null;
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('tr-TR', {

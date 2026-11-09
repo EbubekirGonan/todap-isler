@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { STATUS_LABELS, formatDateTime } from '../format';
+import { STATUS_LABELS, dueDateLabel, formatDateTime } from '../format';
 import type { Task } from '../api';
 
 type Props = {
@@ -21,6 +21,7 @@ export function TaskCard({ task, onOpen, actions }: Props) {
         <p className="mt-2 text-xs font-medium text-slate-600">
           {owners.length}/{task.estimatedPeople}
         </p>
+        {dueDateLabel(task) && <p className="mt-1 text-xs font-medium text-slate-700">{dueDateLabel(task)}</p>}
         <p className="mt-1 text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
       </button>
       {actions && <div className="mt-3 flex gap-2">{actions}</div>}

@@ -101,6 +101,7 @@ tasksRouter.post("/", async (req, res) => {
     projectId: parseOptionalId(body.projectId, "Geçersiz proje."),
     teamId: parseOptionalId(body.teamId, "Geçersiz ekip."),
     dueDate: parseOptionalDate(body.dueDate, "Son tarih"),
+    targetDate: parseOptionalDate(body.targetDate, "Ara hedef tarihi"),
     estimatedPeople: parseEstimatedPeople(body.estimatedPeople),
     teamOnly: body.teamOnly === undefined ? false : parseBoolean(body.teamOnly, "Ekibe özel"),
   });
@@ -129,6 +130,9 @@ function parsePatch(body: Record<string, unknown>): TaskPatch {
   }
   if ("dueDate" in body) {
     patch.dueDate = parseOptionalDate(body.dueDate, "Son tarih");
+  }
+  if ("targetDate" in body) {
+    patch.targetDate = parseOptionalDate(body.targetDate, "Ara hedef tarihi");
   }
   if ("estimatedPeople" in body) {
     patch.estimatedPeople = parseEstimatedPeople(body.estimatedPeople);

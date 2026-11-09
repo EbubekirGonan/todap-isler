@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   addTaskComment,
   assignTask,
@@ -12,7 +12,7 @@ import {
   type TaskPatch,
   type TaskStatus,
 } from '../api';
-import { formatDateTime, historyLabel, STATUS_LABELS } from '../format';
+import { formatDateOnly, formatDateTime, historyLabel, STATUS_LABELS } from '../format';
 import { useLoad } from '../useLoad';
 import { Sheet } from './Sheet';
 import { Spinner } from './Spinner';
@@ -37,6 +37,32 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
   const [commentText, setCommentText] = useState('');
   const { data: task, error, loading } = useLoad(() => getTask(taskId), `${taskId}:${version}`);
   const { data: users, error: usersError } = useLoad(() => listUsers(), String(assignOpen));
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Menü, dışarı tıklanınca veya Escape ile kapanır.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      // Yakalama aşamasında dinlenir; Escape yalnızca menüyü kapatır, detay penceresini kapatmaz.
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      event.stopPropagation();
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [menuOpen]);
+
+  // Katkı, destek ve bırakma işlemlerinden önce kullanıcıdan onay alınır.
+  function confirmAndRun(message: string, action: () => Promise<unknown>) {
+    if (window.confirm(message)) void runAction(action);
+  }
 
   async function runAction(action: () => Promise<unknown>) {
     setBusy(true);
@@ -91,41 +117,24 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
               }}
             />
           ) : (
-            <>
-              <label className="block text-sm font-medium text-slate-800">
-                Durum
-                <select
-                  value={task.status}
-                  disabled={busy}
-                  onChange={(event) => runAction(() => updateTask(taskId, { status: event.target.value as TaskStatus }))}
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {STATUS_LABELS[status]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="space-y-1 text-sm text-slate-700">
-                <p className="font-medium text-slate-900">
-                  Katkı Sağlarım: {owners.length}/{task.estimatedPeople}
+            <div className="space-y-1 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">
+                Katkı Sağlarım: {owners.length}/{task.estimatedPeople}
+              </p>
+              {owners.map((a) => (
+                <p key={a.userId} className="pl-3">
+                  {a.name}
                 </p>
-                {owners.map((a) => (
-                  <p key={a.userId} className="pl-3">
-                    {a.name}
-                  </p>
-                ))}
-                <p className="pt-2 font-medium text-slate-900">Destek atabilirim: {supporters.length}</p>
-                {supporters.map((a) => (
-                  <p key={a.userId} className="pl-3">
-                    {a.name}
-                  </p>
-                ))}
-                <p className="pt-2 text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
-              </div>
-            </>
+              ))}
+              <p className="pt-2 font-medium text-slate-900">Destek atabilirim: {supporters.length}</p>
+              {supporters.map((a) => (
+                <p key={a.userId} className="pl-3">
+                  {a.name}
+                </p>
+              ))}
+              {task.dueDate && <p className="pt-2">Son tarih: {formatDateOnly(task.dueDate)}</p>}
+              <p className="pt-2">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
+            </div>
           )}
 
           {!isDone && (
@@ -134,7 +143,9 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => runAction(() => claimTask(taskId))}
+                  onClick={() =>
+                    confirmAndRun('Bu işe katkı sağlamak istediğinize emin misiniz?', () => claimTask(taskId))
+                  }
                   className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   Katkı sağlarım
@@ -144,23 +155,15 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => runAction(() => supportTask(taskId))}
+                  onClick={() =>
+                    confirmAndRun('Bu işe destek atmak istediğinize emin misiniz?', () => supportTask(taskId))
+                  }
                   className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
                 >
                   Destek atabilirim
                 </button>
               )}
-              {(isOwnerMine || isSupporterMine) && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => runAction(() => releaseTask(taskId))}
-                  className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
-                >
-                  Bırakmak durumundayım
-                </button>
-              )}
-              <div className="relative ml-auto">
+              <div ref={menuRef} className="relative ml-auto">
                 <button
                   type="button"
                   aria-haspopup="menu"
@@ -173,7 +176,7 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                 {menuOpen && (
                   <ul
                     role="menu"
-                    className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-md bg-white text-sm shadow-lg ring-1 ring-slate-200"
+                    className="absolute right-0 z-10 mt-1 w-56 overflow-hidden rounded-md bg-white text-sm shadow-lg ring-1 ring-slate-200"
                   >
                     <li>
                       <button
@@ -202,6 +205,22 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                         Başkasına ata
                       </button>
                     </li>
+                    {(isOwnerMine || isSupporterMine) && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={busy}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            confirmAndRun('Bu işten ayrılmak istediğinize emin misiniz?', () => releaseTask(taskId));
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          Bırakmak durumundayım
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>
@@ -292,7 +311,9 @@ type TaskEditFormProps = {
 function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEditFormProps) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
+  const [status, setStatus] = useState<TaskStatus>(task.status);
   const [estimate, setEstimate] = useState(String(task.estimatedPeople));
+  const [dueDate, setDueDate] = useState(task.dueDate ?? '');
   const parsedEstimate = Number(estimate);
   const estimateValid =
     Number.isInteger(parsedEstimate) && parsedEstimate >= 1 && parsedEstimate <= 50 && parsedEstimate >= ownerCount;
@@ -301,10 +322,13 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!valid) return;
+    if (!window.confirm('Değişiklikleri kaydetmek istediğinize emin misiniz?')) return;
     onSave({
       title: title.trim(),
       description: description.trim() || null,
+      status,
       estimatedPeople: parsedEstimate,
+      dueDate: dueDate || null,
     });
   }
 
@@ -318,6 +342,20 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
           maxLength={200}
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
         />
+      </label>
+      <label className="block text-sm font-medium text-slate-800">
+        Durum
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value as TaskStatus)}
+          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+        >
+          {STATUS_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {STATUS_LABELS[option]}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="block text-sm font-medium text-slate-800">
         Açıklama (isteğe bağlı)
@@ -343,6 +381,15 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
         <span className="mt-1 block text-xs font-normal text-slate-500">
           En az {Math.max(1, ownerCount)} kişi olmalı (şu an {ownerCount} katkı sağlıyor).
         </span>
+      </label>
+      <label className="block text-sm font-medium text-slate-800">
+        Son tarih (isteğe bağlı)
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(event) => setDueDate(event.target.value)}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+        />
       </label>
       <div className="flex gap-2">
         <button

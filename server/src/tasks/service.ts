@@ -12,6 +12,7 @@ export type NewTaskInput = {
   projectId: string | null;
   teamId: string | null;
   dueDate: string | null;
+  targetDate: string | null;
   estimatedPeople: number;
   teamOnly: boolean;
 };
@@ -21,6 +22,7 @@ export type TaskPatch = Partial<{
   description: string | null;
   status: TaskStatus;
   dueDate: string | null;
+  targetDate: string | null;
   estimatedPeople: number;
   teamOnly: boolean;
   teamId: string | null;
@@ -44,6 +46,7 @@ type TaskRow = {
   description: string | null;
   status: TaskStatus;
   due_date: string | null;
+  target_date: string | null;
   completed_at: Date | null;
   estimated_people: number;
   team_only: boolean;
@@ -67,13 +70,14 @@ type TaskBaseRow = {
   description: string | null;
   status: TaskStatus;
   due_date: string | null;
+  target_date: string | null;
   team_only: boolean;
   estimated_people: number;
 };
 
 const TASK_SELECT = `
-  SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date, t.completed_at,
-         t.estimated_people, t.team_only, t.created_by, t.created_at, t.updated_at, t.last_activity_at,
+  SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date, t.target_date,
+         t.completed_at, t.estimated_people, t.team_only, t.created_by, t.created_at, t.updated_at, t.last_activity_at,
          p.name AS project_name, tm.name AS team_name,
          t.parent_task_id, parent.title AS parent_title,
          COALESCE((
@@ -103,6 +107,7 @@ function toTaskDto(row: TaskRow) {
     description: row.description,
     status: row.status,
     dueDate: row.due_date,
+    targetDate: row.target_date,
     completedAt: row.completed_at,
     estimatedPeople: row.estimated_people,
     teamOnly: row.team_only,
@@ -192,8 +197,9 @@ export async function createTask(userId: string, input: NewTaskInput): Promise<s
     await ensureProjectAndTeam(client, input.projectId, input.teamId);
 
     const result = await client.query<{ id: string }>(
-      `INSERT INTO tasks (project_id, team_id, title, description, due_date, estimated_people, team_only, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO tasks (project_id, team_id, title, description, due_date, target_date, estimated_people,
+                          team_only, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         input.projectId,
@@ -201,6 +207,7 @@ export async function createTask(userId: string, input: NewTaskInput): Promise<s
         input.title,
         input.description,
         input.dueDate,
+        input.targetDate,
         input.estimatedPeople,
         input.teamOnly,
         userId,
@@ -221,6 +228,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
       description: "description" in patch ? (patch.description ?? null) : current.description,
       status: patch.status ?? current.status,
       dueDate: "dueDate" in patch ? (patch.dueDate ?? null) : current.due_date,
+      targetDate: "targetDate" in patch ? (patch.targetDate ?? null) : current.target_date,
       estimatedPeople: patch.estimatedPeople ?? current.estimated_people,
       teamOnly: patch.teamOnly ?? current.team_only,
       teamId: "teamId" in patch ? (patch.teamId ?? null) : current.team_id,
@@ -266,6 +274,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
     compare("description", current.description, next.description);
     compare("status", current.status, next.status);
     compare("due_date", current.due_date, next.dueDate);
+    compare("target_date", current.target_date, next.targetDate);
     compare("estimated_people", current.estimated_people, next.estimatedPeople);
     compare("team_only", current.team_only, next.teamOnly);
     compare("team_id", current.team_id, next.teamId);
@@ -285,7 +294,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
     await client.query(
       `UPDATE tasks
           SET title = $2, description = $3, status = $4, due_date = $5, estimated_people = $6,
-              team_only = $7, team_id = $8, project_id = $9,
+              team_only = $7, team_id = $8, project_id = $9, target_date = $10,
               completed_at = ${completedAtSql},
               updated_at = now(), last_activity_at = now()
         WHERE id = $1`,
@@ -299,6 +308,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
         next.teamOnly,
         next.teamId,
         next.projectId,
+        next.targetDate,
       ],
     );
 

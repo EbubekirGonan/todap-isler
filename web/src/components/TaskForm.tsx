@@ -15,6 +15,7 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
   const [teamId, setTeamId] = useState(teams.length === 1 ? teams[0].id : '');
   const [teamOnly, setTeamOnly] = useState(false);
   const [estimatedPeople, setEstimatedPeople] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +43,7 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
         teamId: teamId || null,
         teamOnly: teamOnly && teamId !== '',
         estimatedPeople: estimate,
+        dueDate: dueDate || null,
       });
       onCreated();
     } catch (err) {
@@ -112,6 +114,16 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
           />
           <span className="mt-1 block text-xs font-normal text-slate-500">Boş bırakılırsa 1 kişi sayılır.</span>
+        </label>
+
+        <label className="block text-sm font-medium text-slate-800">
+          Son tarih (isteğe bağlı)
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+          />
         </label>
 
         <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
