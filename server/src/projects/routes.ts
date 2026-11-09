@@ -14,12 +14,12 @@ const PROJECT_SELECT = `
          COUNT(t.id) FILTER (WHERE t.id IS NOT NULL) AS total_count,
          COUNT(t.id) FILTER (WHERE t.status = 'done') AS done_count,
          COUNT(t.id) FILTER (
-           WHERE t.status <> 'done' AND t.needs_assignee
-             AND NOT EXISTS (
-               SELECT 1 FROM task_assignments a
+           WHERE t.status <> 'done'
+             AND t.estimated_people > (
+               SELECT COUNT(*) FROM task_assignments a
                 WHERE a.task_id = t.id AND a.role = 'owner' AND a.ended_at IS NULL
              )
-         ) AS needs_assignee_count
+         ) AS open_count
     FROM projects p
     LEFT JOIN teams tm ON tm.id = p.team_id
     LEFT JOIN tasks t ON t.project_id = p.id AND t.deleted_at IS NULL`;
@@ -37,7 +37,7 @@ type ProjectRow = {
   team_name: string | null;
   total_count: string;
   done_count: string;
-  needs_assignee_count: string;
+  open_count: string;
 };
 
 function toProjectDto(row: ProjectRow) {
@@ -56,7 +56,7 @@ function toProjectDto(row: ProjectRow) {
       total,
       done,
       percent: total === 0 ? 0 : Math.round((done / total) * 100),
-      needsAssignee: Number(row.needs_assignee_count),
+      openCount: Number(row.open_count),
     },
   };
 }

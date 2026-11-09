@@ -6,23 +6,27 @@ import {
   getTask,
   listUsers,
   releaseTask,
+  supportTask,
+  updateTask,
+  type TaskStatus,
 } from '../api';
 import { formatDateTime, historyLabel, STATUS_LABELS } from '../format';
 import { useLoad } from '../useLoad';
-import { Badge } from './TaskCard';
 import { Sheet } from './Sheet';
+import { TaskBadges } from './TaskCard';
+
+const STATUS_OPTIONS: TaskStatus[] = ['planning', 'in_progress', 'nearly_done', 'done'];
 
 type Props = {
   taskId: string;
   currentUserId: string;
-  assignNow: boolean;
   onClose: () => void;
   onChanged: () => void;
 };
 
-export function TaskDetail({ taskId, currentUserId, assignNow, onClose, onChanged }: Props) {
+export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props) {
   const [version, setVersion] = useState(0);
-  const [assignOpen, setAssignOpen] = useState(assignNow);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -55,8 +59,10 @@ export function TaskDetail({ taskId, currentUserId, assignNow, onClose, onChange
   }
 
   const isDone = task?.status === 'done';
-  const hasOwner = task?.assignments.some((assignment) => assignment.role === 'owner') ?? false;
-  const isMine = task?.assignments.some((assignment) => assignment.userId === currentUserId) ?? false;
+  const owners = task?.assignments.filter((a) => a.role === 'owner') ?? [];
+  const supporters = task?.assignments.filter((a) => a.role === 'support') ?? [];
+  const isOwnerMine = owners.some((a) => a.userId === currentUserId);
+  const isSupporterMine = supporters.some((a) => a.userId === currentUserId);
 
   return (
     <Sheet title={task?.title ?? 'Görev'} onClose={onClose}>
@@ -65,43 +71,68 @@ export function TaskDetail({ taskId, currentUserId, assignNow, onClose, onChange
 
       {task && (
         <div className="space-y-5">
-          <div className="flex flex-wrap gap-1.5 text-xs">
-            <Badge>{STATUS_LABELS[task.status]}</Badge>
-            {task.needsAssignee && <Badge tone="amber">Kişi lazım</Badge>}
-            {task.teamOnly && <Badge tone="violet">Ekibe özel</Badge>}
-            {task.teamName && <Badge>{task.teamName}</Badge>}
-            {task.projectName && <Badge>{task.projectName}</Badge>}
-          </div>
+          <TaskBadges task={task} />
 
           {task.description && <p className="whitespace-pre-wrap text-slate-800">{task.description}</p>}
 
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-800">
+              Durum
+              <select
+                value={task.status}
+                disabled={busy}
+                onChange={(event) => runAction(() => updateTask(taskId, { status: event.target.value as TaskStatus }))}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <EstimateField
+              key={version}
+              value={task.estimatedPeople}
+              ownerCount={owners.length}
+              disabled={busy}
+              onSave={(value) => runAction(() => updateTask(taskId, { estimatedPeople: value }))}
+            />
+          </div>
+
           <div className="text-sm text-slate-600">
             <p>
-              Sahibi:{' '}
-              {task.assignments.filter((a) => a.role === 'owner').map((a) => a.name).join(', ') || 'yok'}
+              Katkı sağlayan ({owners.length}/{task.estimatedPeople}):{' '}
+              {owners.map((a) => a.name).join(', ') || 'yok'}
             </p>
-            {task.assignments.some((a) => a.role === 'support') && (
-              <p>
-                Destek:{' '}
-                {task.assignments.filter((a) => a.role === 'support').map((a) => a.name).join(', ')}
-              </p>
-            )}
+            {supporters.length > 0 && <p>Destek: {supporters.map((a) => a.name).join(', ')}</p>}
             <p className="text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
           </div>
 
           {!isDone && (
             <div className="flex flex-wrap gap-2">
-              {!hasOwner && (
+              {!isOwnerMine && (
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => runAction(() => claimTask(taskId))}
                   className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  Üstlen
+                  Katkı sağlarım
                 </button>
               )}
-              {isMine && (
+              {!isSupporterMine && !isOwnerMine && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => runAction(() => supportTask(taskId))}
+                  className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                >
+                  Destek atabilirim
+                </button>
+              )}
+              {(isOwnerMine || isSupporterMine) && (
                 <button
                   type="button"
                   disabled={busy}
@@ -191,5 +222,44 @@ export function TaskDetail({ taskId, currentUserId, assignNow, onClose, onChange
         </div>
       )}
     </Sheet>
+  );
+}
+
+type EstimateFieldProps = {
+  value: number;
+  ownerCount: number;
+  disabled: boolean;
+  onSave: (value: number) => Promise<boolean>;
+};
+
+// Tahmini kişi sayısı düzenleyici. Üst bileşen sürüm değişince key ile yeniden oluşturur.
+function EstimateField({ value, ownerCount, disabled, onSave }: EstimateFieldProps) {
+  const [text, setText] = useState(String(value));
+  const parsed = Number(text);
+  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 50 && parsed >= ownerCount;
+
+  return (
+    <div className="flex items-end gap-2">
+      <label className="block flex-1 text-sm font-medium text-slate-800">
+        Tahmini Gerekli Kişi Sayısı
+        <input
+          type="number"
+          inputMode="numeric"
+          min={Math.max(1, ownerCount)}
+          max={50}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={disabled || !valid || parsed === value}
+        onClick={() => onSave(parsed)}
+        className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+      >
+        Kaydet
+      </button>
+    </div>
   );
 }

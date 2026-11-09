@@ -147,11 +147,11 @@ async function seedProjects(
 type TaskInput = {
   title: string;
   description?: string;
-  status?: "todo" | "doing" | "done";
+  status?: "planning" | "in_progress" | "nearly_done" | "done";
   // Bugüne göre gün ofseti (ör. -5 = 5 gün önce); null ise termin yok.
   dueDate?: number | null;
   completedAt?: Date | null;
-  needsAssignee?: boolean;
+  estimatedPeople?: number;
   teamOnly?: boolean;
   teamId?: Id | null;
   projectId?: Id | null;
@@ -163,16 +163,16 @@ async function createTask(client: pg.PoolClient, task: TaskInput): Promise<Id> {
   return insertRow(
     client,
     `INSERT INTO tasks
-       (title, description, status, due_date, completed_at, needs_assignee, team_only,
+       (title, description, status, due_date, completed_at, estimated_people, team_only,
         team_id, project_id, parent_task_id, created_by)
      VALUES ($1, $2, $3, current_date + $4::integer, $5, $6, $7, $8, $9, $10, $11)`,
     [
       task.title,
       task.description ?? null,
-      task.status ?? "todo",
+      task.status ?? "planning",
       task.dueDate ?? null,
       task.completedAt ?? null,
-      task.needsAssignee ?? false,
+      task.estimatedPeople ?? 1,
       task.teamOnly ?? false,
       task.teamId ?? null,
       task.projectId ?? null,
@@ -210,7 +210,7 @@ async function seedTasks(
   const report = await createTask(client, {
     title: "Bağış raporunu hazırlamak",
     description: "Üç aylık bağış özetinin hazırlanması",
-    status: "doing",
+    status: "in_progress",
     dueDate: -5,
     teamId: t.board,
     createdBy: u.ayse,
@@ -221,7 +221,7 @@ async function seedTasks(
   // 2. Yaklaşan, sahipli (üstlenilmiş), projeye bağlı
   const hall = await createTask(client, {
     title: "Eğitim salonu rezervasyonu",
-    status: "todo",
+    status: "planning",
     dueDate: 2,
     teamId: t.education,
     projectId: p.education,
@@ -232,42 +232,41 @@ async function seedTasks(
   // 3. Terminsiz, sahipli (üstlenilmiş)
   const calendar = await createTask(client, {
     title: "Sosyal medya paylaşım takvimi",
-    status: "doing",
+    status: "in_progress",
     dueDate: null,
     teamId: t.social,
     createdBy: u.selin,
   });
   await assign(client, calendar, u.selin, "owner", "claimed", null);
 
-  // 4. Havuz: needs_assignee = true, sahipsiz
+  // 4. Havuz: tahmin 3 kişi, sahipsiz
   const trainer = await createTask(client, {
     title: "Kurs için gönüllü eğitmen bulmak",
     description: "Kasım programındaki atölye için eğitmen aranıyor",
-    status: "todo",
+    status: "planning",
     dueDate: 7,
-    needsAssignee: true,
+    estimatedPeople: 3,
     teamId: t.education,
     projectId: p.education,
     createdBy: u.mehmet,
   });
 
-  // 5. Havuz: needs_assignee = true, sahipsiz
+  // 5. Havuz: tahmin 2 kişi, sahipsiz
   await createTask(client, {
     title: "Genel kurul için kahve ikramı tedariki",
-    status: "todo",
+    status: "planning",
     dueDate: 30,
-    needsAssignee: true,
+    estimatedPeople: 2,
     teamId: t.board,
     projectId: p.general,
     createdBy: u.ayse,
   });
 
-  // 6. needs_assignee = true ama sahipli: havuzda görünmez
+  // 6. Tahmin 1 kişi ve sahipli: havuzda görünmez
   const poster = await createTask(client, {
     title: "Genel kurul afişi tasarımı",
-    status: "todo",
+    status: "planning",
     dueDate: 10,
-    needsAssignee: true,
     teamId: t.social,
     createdBy: u.selin,
   });
@@ -277,9 +276,8 @@ async function seedTasks(
   const archive = await createTask(client, {
     title: "Yönetim kurulu toplantı notları arşivi",
     description: "Yalnızca kurul üyelerinin göreceği dosyalar",
-    status: "todo",
+    status: "planning",
     dueDate: 4,
-    needsAssignee: true,
     teamOnly: true,
     teamId: t.board,
     createdBy: u.ayse,
@@ -300,7 +298,7 @@ async function seedTasks(
   // 9. Alt görev (parent: salon rezervasyonu)
   const projector = await createTask(client, {
     title: "Salon için projeksiyon kontrolü",
-    status: "todo",
+    status: "planning",
     dueDate: 1,
     teamId: t.education,
     parentId: hall,
@@ -308,12 +306,12 @@ async function seedTasks(
   });
   await assign(client, projector, u.selin, "owner", "claimed", null);
 
-  // 10. Bırakılmış atama: Kerem bıraktı, görev havuza döndü
+  // 10. Tahmin 2 kişi; Kerem bıraktı, görev havuzda kalır
   const survey = await createTask(client, {
     title: "Sosyal medya anket formu",
-    status: "todo",
+    status: "planning",
     dueDate: 14,
-    needsAssignee: true,
+    estimatedPeople: 2,
     teamId: t.social,
     createdBy: u.selin,
   });
@@ -322,7 +320,7 @@ async function seedTasks(
   // 11. Sahipli + destekçi (atanmış)
   const invitation = await createTask(client, {
     title: "Genel kurul davetiye metni",
-    status: "doing",
+    status: "in_progress",
     dueDate: 15,
     teamId: t.board,
     projectId: p.general,
@@ -334,7 +332,7 @@ async function seedTasks(
   // 12. Gecikmiş, atanmış sahip
   const translation = await createTask(client, {
     title: "Eğitim materyali çevirisi",
-    status: "doing",
+    status: "in_progress",
     dueDate: -12,
     teamId: t.education,
     projectId: p.education,
@@ -365,9 +363,9 @@ async function seedCommentsAndHistory(
   }
 
   const history: [Id, Id, string, string | null, string | null][] = [
-    [tasks.report, u.mehmet, "status", "todo", "doing"],
-    [tasks.trainer, u.mehmet, "needs_assignee", "false", "true"],
-    [tasks.certificates, u.mehmet, "status", "doing", "done"],
+    [tasks.report, u.mehmet, "status", "planning", "in_progress"],
+    [tasks.trainer, u.mehmet, "estimated_people", "1", "3"],
+    [tasks.certificates, u.mehmet, "status", "in_progress", "done"],
     [tasks.survey, u.kerem, "owner", "Kerem Demir", null],
   ];
   for (const [taskId, userId, field, oldValue, newValue] of history) {

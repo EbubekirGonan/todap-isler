@@ -16,15 +16,12 @@ export function TaskCard({ task, onOpen, actions }: Props) {
     <article className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <h3 className="font-semibold text-slate-900">{task.title}</h3>
-        <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-          <Badge>{STATUS_LABELS[task.status]}</Badge>
-          {task.needsAssignee && <Badge tone="amber">Kişi lazım</Badge>}
-          {task.teamOnly && <Badge tone="violet">Ekibe özel</Badge>}
-          {task.teamName && <Badge>{task.teamName}</Badge>}
-          {task.projectName && <Badge>{task.projectName}</Badge>}
+        <div className="mt-2">
+          <TaskBadges task={task} />
         </div>
         <p className="mt-2 text-sm text-slate-600">
-          {owners.length > 0 ? `Sahibi: ${owners.map((owner) => owner.name).join(', ')}` : 'Sahibi yok'}
+          {owners.length > 0 ? `Katkı sağlayan: ${owners.map((owner) => owner.name).join(', ')}` : 'Katkı sağlayan yok'}
+          {` (${owners.length}/${task.estimatedPeople})`}
           {supporters.length > 0 && ` · Destek: ${supporters.map((supporter) => supporter.name).join(', ')}`}
         </p>
         <p className="mt-1 text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
@@ -34,12 +31,26 @@ export function TaskCard({ task, onOpen, actions }: Props) {
   );
 }
 
-type BadgeTone = 'slate' | 'amber' | 'violet';
+// Durum, görünürlük, ekip, proje ve üst iş etiketleri. Hem kartta hem detayda kullanılır.
+export function TaskBadges({ task }: { task: Task }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 text-xs">
+      <Badge>{STATUS_LABELS[task.status]}</Badge>
+      {task.teamOnly && <Badge tone="violet">Ekibe özel</Badge>}
+      {task.teamName && <Badge>{task.teamName}</Badge>}
+      {task.projectName && <Badge tone="teal">Proje: {task.projectName}</Badge>}
+      {task.parentTitle && <Badge tone="sky">Üst iş: {task.parentTitle}</Badge>}
+    </div>
+  );
+}
+
+type BadgeTone = 'slate' | 'violet' | 'teal' | 'sky';
 
 const BADGE_TONES: Record<BadgeTone, string> = {
   slate: 'bg-slate-100 text-slate-700',
-  amber: 'bg-amber-100 text-amber-800',
   violet: 'bg-violet-100 text-violet-800',
+  teal: 'bg-teal-100 text-teal-800',
+  sky: 'bg-sky-100 text-sky-800',
 };
 
 export function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?: BadgeTone }) {

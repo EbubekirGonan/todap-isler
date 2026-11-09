@@ -3,7 +3,8 @@ import { query, withTransaction } from "../db.js";
 import { HttpError } from "../http-error.js";
 import { isActiveTeamMember, scopeSql, visibleToUserSql, type TaskScope } from "../policy/visibility.js";
 
-export type TaskStatus = "todo" | "doing" | "done";
+export const TASK_STATUSES = ["planning", "in_progress", "nearly_done", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export type NewTaskInput = {
   title: string;
@@ -11,7 +12,7 @@ export type NewTaskInput = {
   projectId: string | null;
   teamId: string | null;
   dueDate: string | null;
-  needsAssignee: boolean;
+  estimatedPeople: number;
   teamOnly: boolean;
 };
 
@@ -20,7 +21,7 @@ export type TaskPatch = Partial<{
   description: string | null;
   status: TaskStatus;
   dueDate: string | null;
-  needsAssignee: boolean;
+  estimatedPeople: number;
   teamOnly: boolean;
   teamId: string | null;
   projectId: string | null;
@@ -31,7 +32,6 @@ export type TaskFilters = {
   scope: TaskScope;
   status?: TaskStatus;
   projectId?: string;
-  needsAssignee?: boolean;
 };
 
 type AssignmentRow = { userId: string; name: string; role: string; source: string };
@@ -45,7 +45,7 @@ type TaskRow = {
   status: TaskStatus;
   due_date: string | null;
   completed_at: Date | null;
-  needs_assignee: boolean;
+  estimated_people: number;
   team_only: boolean;
   created_by: string;
   created_at: Date;
@@ -53,6 +53,8 @@ type TaskRow = {
   last_activity_at: Date;
   project_name: string | null;
   team_name: string | null;
+  parent_task_id: string | null;
+  parent_title: string | null;
   assignments: AssignmentRow[];
 };
 
@@ -66,13 +68,14 @@ type TaskBaseRow = {
   status: TaskStatus;
   due_date: string | null;
   team_only: boolean;
-  needs_assignee: boolean;
+  estimated_people: number;
 };
 
 const TASK_SELECT = `
   SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date, t.completed_at,
-         t.needs_assignee, t.team_only, t.created_by, t.created_at, t.updated_at, t.last_activity_at,
+         t.estimated_people, t.team_only, t.created_by, t.created_at, t.updated_at, t.last_activity_at,
          p.name AS project_name, tm.name AS team_name,
+         t.parent_task_id, parent.title AS parent_title,
          COALESCE((
            SELECT json_agg(json_build_object('userId', u.id::text, 'name', u.name, 'role', a.role, 'source', a.source)
                            ORDER BY a.role, a.started_at)
@@ -82,9 +85,11 @@ const TASK_SELECT = `
          ), '[]'::json) AS assignments
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.project_id
-    LEFT JOIN teams tm ON tm.id = t.team_id`;
+    LEFT JOIN teams tm ON tm.id = t.team_id
+    LEFT JOIN tasks parent ON parent.id = t.parent_task_id`;
 
 // Ürün kuralları: görev düzenlenebilir ve silinebilir (herkes), ekibe özel görevlere yalnızca ekip üyeleri atanabilir.
+// Katkı sağlayan (owner) kişi sayısı tahmini gerekli kişi sayısını geçemez; destek (support) kaydı sayılmaz.
 function toTaskDto(row: TaskRow) {
   return {
     id: row.id,
@@ -92,12 +97,14 @@ function toTaskDto(row: TaskRow) {
     projectName: row.project_name,
     teamId: row.team_id,
     teamName: row.team_name,
+    parentTaskId: row.parent_task_id,
+    parentTitle: row.parent_title,
     title: row.title,
     description: row.description,
     status: row.status,
     dueDate: row.due_date,
     completedAt: row.completed_at,
-    needsAssignee: row.needs_assignee,
+    estimatedPeople: row.estimated_people,
     teamOnly: row.team_only,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -106,6 +113,10 @@ function toTaskDto(row: TaskRow) {
     assignments: row.assignments,
   };
 }
+
+// Aktif katkı sağlayan kişi sayısı. Görev tablosu üzerinde çalışan sorgularda t.id ile kullanılır.
+const OWNER_COUNT_SQL = `(SELECT COUNT(*) FROM task_assignments a
+                           WHERE a.task_id = t.id AND a.role = 'owner' AND a.ended_at IS NULL)`;
 
 export async function listTasks(userId: string, filters: TaskFilters) {
   const params: unknown[] = [userId];
@@ -117,9 +128,7 @@ export async function listTasks(userId: string, filters: TaskFilters) {
     );
   }
   if (filters.view === "pool") {
-    conditions.push(
-      "NOT EXISTS (SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.role = 'owner' AND a.ended_at IS NULL)",
-    );
+    conditions.push(`${OWNER_COUNT_SQL} < t.estimated_people`);
   }
 
   if (filters.status) {
@@ -131,10 +140,6 @@ export async function listTasks(userId: string, filters: TaskFilters) {
   if (filters.projectId) {
     params.push(filters.projectId);
     conditions.push(`t.project_id = $${params.length}`);
-  }
-  if (filters.needsAssignee !== undefined) {
-    params.push(filters.needsAssignee);
-    conditions.push(`t.needs_assignee = $${params.length}`);
   }
 
   // En gecikmişten başlayan sıralama: en erken son tarih önce, tarihsizler sonda.
@@ -187,7 +192,7 @@ export async function createTask(userId: string, input: NewTaskInput): Promise<s
     await ensureProjectAndTeam(client, input.projectId, input.teamId);
 
     const result = await client.query<{ id: string }>(
-      `INSERT INTO tasks (project_id, team_id, title, description, due_date, needs_assignee, team_only, created_by)
+      `INSERT INTO tasks (project_id, team_id, title, description, due_date, estimated_people, team_only, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
@@ -196,7 +201,7 @@ export async function createTask(userId: string, input: NewTaskInput): Promise<s
         input.title,
         input.description,
         input.dueDate,
-        input.needsAssignee,
+        input.estimatedPeople,
         input.teamOnly,
         userId,
       ],
@@ -216,7 +221,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
       description: "description" in patch ? (patch.description ?? null) : current.description,
       status: patch.status ?? current.status,
       dueDate: "dueDate" in patch ? (patch.dueDate ?? null) : current.due_date,
-      needsAssignee: patch.needsAssignee ?? current.needs_assignee,
+      estimatedPeople: patch.estimatedPeople ?? current.estimated_people,
       teamOnly: patch.teamOnly ?? current.team_only,
       teamId: "teamId" in patch ? (patch.teamId ?? null) : current.team_id,
       projectId: "projectId" in patch ? (patch.projectId ?? null) : current.project_id,
@@ -226,6 +231,10 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
       throw new HttpError(400, "Ekibe özel görev için ekip seçmelisiniz.");
     }
     await ensureProjectAndTeam(client, next.projectId, next.teamId);
+
+    if (next.estimatedPeople < (await getOwnerCount(client, taskId))) {
+      throw new HttpError(409, "Tahmini kişi sayısı, görevdeki katkı sağlayan kişi sayısından az olamaz.");
+    }
 
     // Ekibe özel hale gelen ya da ekibi değişen görevde, mevcut atananlar yeni ekibin üyesi olmalıdır.
     if (next.teamOnly && (!current.team_only || next.teamId !== current.team_id)) {
@@ -257,7 +266,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
     compare("description", current.description, next.description);
     compare("status", current.status, next.status);
     compare("due_date", current.due_date, next.dueDate);
-    compare("needs_assignee", current.needs_assignee, next.needsAssignee);
+    compare("estimated_people", current.estimated_people, next.estimatedPeople);
     compare("team_only", current.team_only, next.teamOnly);
     compare("team_id", current.team_id, next.teamId);
     compare("project_id", current.project_id, next.projectId);
@@ -275,7 +284,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
 
     await client.query(
       `UPDATE tasks
-          SET title = $2, description = $3, status = $4, due_date = $5, needs_assignee = $6,
+          SET title = $2, description = $3, status = $4, due_date = $5, estimated_people = $6,
               team_only = $7, team_id = $8, project_id = $9,
               completed_at = ${completedAtSql},
               updated_at = now(), last_activity_at = now()
@@ -286,7 +295,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
         next.description,
         next.status,
         next.dueDate,
-        next.needsAssignee,
+        next.estimatedPeople,
         next.teamOnly,
         next.teamId,
         next.projectId,
@@ -316,12 +325,15 @@ export async function claimTask(userId: string, taskId: string): Promise<void> {
     if (task.status === "done") {
       throw new HttpError(409, "Tamamlanmış görev üstlenilemez.");
     }
-    if (await getActiveOwnerId(client, taskId)) {
-      throw new HttpError(409, "Bu görev zaten birine atanmış.");
+    if (await isOwner(client, taskId, userId)) {
+      throw new HttpError(409, "Bu görevde zaten katkı sağlıyorsunuz.");
+    }
+    if ((await getOwnerCount(client, taskId)) >= task.estimated_people) {
+      throw new HttpError(409, "Bu görevde tahmini kişi sayısı dolu.");
     }
 
     const name = await getUserName(client, userId);
-    // Kişi bu görevde destek olarak yer alıyorsa, sahiplenince destek kaydı kapanır.
+    // Kişi bu görevde destek olarak yer alıyorsa, katkı sağlayınca destek kaydı kapanır.
     await endAssignments(client, taskId, userId, userId, name);
 
     await client.query(
@@ -371,7 +383,8 @@ export async function supportTask(userId: string, taskId: string): Promise<void>
   });
 }
 
-// Görevi başka bir kişiye atar. Mevcut sahip çıkarılır, hedef kişinin destek kaydı sahiplik kaydına dönüşür.
+// Görevi başka bir kişiye katkı sağlayan olarak ekler. Mevcut katkı sağlayanlar kalır; kapasite dolu değilse ekleme yapılır.
+// Hedef kişinin varsa destek kaydı katkı kaydına dönüşür.
 export async function assignTask(userId: string, taskId: string, targetUserId: string): Promise<void> {
   await withTransaction(async (client) => {
     const task = await lockVisibleTask(client, userId, taskId);
@@ -390,27 +403,20 @@ export async function assignTask(userId: string, taskId: string, targetUserId: s
     if (task.team_only && task.team_id && !(await isActiveTeamMember(client, task.team_id, targetUserId))) {
       throw new HttpError(400, "Ekibe özel görevlere yalnızca ekip üyeleri atanabilir.");
     }
-
-    const currentOwnerId = await getActiveOwnerId(client, taskId);
-    if (currentOwnerId === targetUserId) {
+    if (await isOwner(client, taskId, targetUserId)) {
       throw new HttpError(409, "Görev zaten bu kişide.");
     }
-
-    const oldOwnerName = currentOwnerId ? await getUserName(client, currentOwnerId) : null;
-    if (currentOwnerId) {
-      await client.query(
-        "UPDATE task_assignments SET ended_at = now() WHERE task_id = $1 AND role = 'owner' AND ended_at IS NULL",
-        [taskId],
-      );
+    if ((await getOwnerCount(client, taskId)) >= task.estimated_people) {
+      throw new HttpError(409, "Bu görevde tahmini kişi sayısı dolu.");
     }
-    await endAssignments(client, taskId, targetUserId, userId, targetUser.name);
 
+    await endAssignments(client, taskId, targetUserId, userId, targetUser.name);
     await client.query(
       `INSERT INTO task_assignments (task_id, user_id, role, source, assigned_by)
        VALUES ($1, $2, 'owner', 'assigned', $3)`,
       [taskId, targetUserId, userId],
     );
-    await recordHistory(client, taskId, userId, "owner", oldOwnerName, targetUser.name);
+    await recordHistory(client, taskId, userId, "owner", null, targetUser.name);
     await touchTask(client, taskId);
   });
 }
@@ -431,7 +437,7 @@ export async function addComment(userId: string, taskId: string, body: string): 
 async function lockVisibleTask(client: pg.PoolClient, userId: string, taskId: string): Promise<TaskBaseRow> {
   const result = await client.query<TaskBaseRow>(
     `SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date,
-            t.team_only, t.needs_assignee
+            t.team_only, t.estimated_people
        FROM tasks t
       WHERE t.id = $1 AND t.deleted_at IS NULL AND ${visibleToUserSql("$2")}
       FOR UPDATE OF t`,
@@ -463,12 +469,20 @@ async function ensureProjectAndTeam(
   }
 }
 
-async function getActiveOwnerId(client: pg.PoolClient, taskId: string): Promise<string | null> {
-  const result = await client.query<{ user_id: string }>(
-    "SELECT user_id FROM task_assignments WHERE task_id = $1 AND role = 'owner' AND ended_at IS NULL",
+async function getOwnerCount(client: pg.PoolClient, taskId: string): Promise<number> {
+  const result = await client.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM task_assignments WHERE task_id = $1 AND role = 'owner' AND ended_at IS NULL",
     [taskId],
   );
-  return result.rows[0]?.user_id ?? null;
+  return Number(result.rows[0].count);
+}
+
+async function isOwner(client: pg.PoolClient, taskId: string, userId: string): Promise<boolean> {
+  const result = await client.query(
+    "SELECT 1 FROM task_assignments WHERE task_id = $1 AND user_id = $2 AND role = 'owner' AND ended_at IS NULL",
+    [taskId, userId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 async function getUserName(client: pg.PoolClient, userId: string): Promise<string> {

@@ -14,7 +14,7 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
   const [description, setDescription] = useState('');
   const [teamId, setTeamId] = useState(teams.length === 1 ? teams[0].id : '');
   const [teamOnly, setTeamOnly] = useState(false);
-  const [needsAssignee, setNeedsAssignee] = useState(false);
+  const [estimatedPeople, setEstimatedPeople] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +26,13 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
       return;
     }
 
+    const trimmedEstimate = estimatedPeople.trim();
+    const estimate = trimmedEstimate === '' ? null : Number(trimmedEstimate);
+    if (estimate !== null && (!Number.isInteger(estimate) || estimate < 1 || estimate > 50)) {
+      setError('Tahmini kişi sayısı 1 ile 50 arasında bir tam sayı olmalıdır.');
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -34,7 +41,7 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
         description: description.trim() || null,
         teamId: teamId || null,
         teamOnly: teamOnly && teamId !== '',
-        needsAssignee,
+        estimatedPeople: estimate,
       });
       onCreated();
     } catch (err) {
@@ -92,19 +99,19 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
           </label>
         )}
 
-        <label className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
-          <span>
-            <span className="block font-medium text-slate-900">Kişi lazım</span>
-            <span className="text-slate-500">Bu işe birinin destek olmasına ihtiyaç var</span>
-          </span>
+        <label className="block text-sm font-medium text-slate-800">
+          Tahmini Gerekli Kişi Sayısı
           <input
-            type="checkbox"
-            role="switch"
-            aria-checked={needsAssignee}
-            checked={needsAssignee}
-            onChange={(event) => setNeedsAssignee(event.target.checked)}
-            className="h-5 w-9 accent-teal-700"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={50}
+            value={estimatedPeople}
+            onChange={(event) => setEstimatedPeople(event.target.value)}
+            placeholder="1"
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
           />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Boş bırakılırsa 1 kişi sayılır.</span>
         </label>
 
         <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">

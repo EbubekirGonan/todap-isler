@@ -27,7 +27,7 @@ export function AppShell({ user, onSignedOut }: Props) {
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState('mine');
   const [reloadKey, setReloadKey] = useState(0);
-  const [openTask, setOpenTask] = useState<{ id: string; assignNow: boolean } | null>(null);
+  const [openTask, setOpenTask] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -82,12 +82,12 @@ export function AppShell({ user, onSignedOut }: Props) {
 
       <main className="flex-1 px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-5">
         {activeKey === 'mine' && (
-          <MyTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask({ id, assignNow: false })} />
+          <MyTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
         {activeKey === 'pool' && (
           <PoolScreen
             reloadKey={reloadKey}
-            onOpenTask={(id, assignNow) => setOpenTask({ id, assignNow })}
+            onOpenTask={(id) => setOpenTask(id)}
             onChanged={refreshLists}
           />
         )}
@@ -117,10 +117,9 @@ export function AppShell({ user, onSignedOut }: Props) {
 
       {openTask && (
         <TaskDetail
-          key={openTask.id}
-          taskId={openTask.id}
+          key={openTask}
+          taskId={openTask}
           currentUserId={user.id}
-          assignNow={openTask.assignNow}
           onClose={() => setOpenTask(null)}
           onChanged={refreshLists}
         />

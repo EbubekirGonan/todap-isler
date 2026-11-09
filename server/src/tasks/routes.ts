@@ -31,8 +31,9 @@ export const tasksRouter = Router();
 
 tasksRouter.use(requireAuth);
 
-const TASK_STATUSES: TaskStatus[] = ["todo", "doing", "done"];
+const TASK_STATUSES: TaskStatus[] = ["planning", "in_progress", "nearly_done", "done"];
 const SCOPES: TaskScope[] = ["all", "public", "mine-team"];
+const MAX_ESTIMATED_PEOPLE = 50;
 
 function currentUserId(req: Request): string {
   if (!req.user) {
@@ -48,17 +49,16 @@ function parseStatus(value: unknown): TaskStatus {
   return value as TaskStatus;
 }
 
-function parseOptionalFlag(value: unknown, field: string): boolean | undefined {
-  if (value === undefined) {
-    return undefined;
+// Boş ya da eksik değer 1 kişi anlamına gelir.
+function parseEstimatedPeople(value: unknown): number {
+  if (value === undefined || value === null || value === "") {
+    return 1;
   }
-  if (value === "true") {
-    return true;
+  const count = typeof value === "string" ? Number(value.trim()) : value;
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > MAX_ESTIMATED_PEOPLE) {
+    throw new HttpError(400, `Tahmini gerekli kişi sayısı 1 ile ${MAX_ESTIMATED_PEOPLE} arasında bir tam sayı olmalıdır.`);
   }
-  if (value === "false") {
-    return false;
-  }
-  throw new HttpError(400, `${field} true ya da false olmalıdır.`);
+  return count;
 }
 
 function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskFilters {
@@ -73,10 +73,6 @@ function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskF
   }
   if (query.projectId !== undefined) {
     filters.projectId = parseId(query.projectId, "Geçersiz proje.");
-  }
-  const needsAssignee = parseOptionalFlag(query.needsAssignee, "Kişi lazım filtresi");
-  if (needsAssignee !== undefined) {
-    filters.needsAssignee = needsAssignee;
   }
   return filters;
 }
@@ -105,7 +101,7 @@ tasksRouter.post("/", async (req, res) => {
     projectId: parseOptionalId(body.projectId, "Geçersiz proje."),
     teamId: parseOptionalId(body.teamId, "Geçersiz ekip."),
     dueDate: parseOptionalDate(body.dueDate, "Son tarih"),
-    needsAssignee: body.needsAssignee === undefined ? false : parseBoolean(body.needsAssignee, "Kişi lazım"),
+    estimatedPeople: parseEstimatedPeople(body.estimatedPeople),
     teamOnly: body.teamOnly === undefined ? false : parseBoolean(body.teamOnly, "Ekibe özel"),
   });
   res.status(201).json({ id });
@@ -134,8 +130,8 @@ function parsePatch(body: Record<string, unknown>): TaskPatch {
   if ("dueDate" in body) {
     patch.dueDate = parseOptionalDate(body.dueDate, "Son tarih");
   }
-  if ("needsAssignee" in body) {
-    patch.needsAssignee = parseBoolean(body.needsAssignee, "Kişi lazım");
+  if ("estimatedPeople" in body) {
+    patch.estimatedPeople = parseEstimatedPeople(body.estimatedPeople);
   }
   if ("teamOnly" in body) {
     patch.teamOnly = parseBoolean(body.teamOnly, "Ekibe özel");

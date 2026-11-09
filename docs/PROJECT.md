@@ -35,7 +35,7 @@ Kullanıcıların çoğu telefondan girecek. İlk sürüm mobil öncelikli bir w
 
 Herkes için:
 1. İşlerim: Bana üstlendiğim veya bana atanmış aktif işler. Gruplar: Geciken / Bu hafta / Sonra. Altta "İş ekle" butonu.
-2. Havuz: Kişi aranan ve henüz sahibi olmayan işler. Satırda iki eylem: "Üstlen" (işi kendime al) ve "Ata" (bir kişi seçip ata).
+2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri.
 3. Projeler: Büyük çaplı işler. Kartta: ad, bitiş tarihi, ilerleme çubuğu ("8 görevin 5'i bitti"), "N görevde kişi aranıyor". Projenin içinde görevleri listelenir. "Proje ekle" butonu.
 4. Görevler: Tüm görevler tek liste. Varsayılan: yalnızca açık görevler, termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Amaç: bitmeyen işlerin bitmesine yönlendirmek. Filtreler: Açık/Bitenler, Proje, Kişi aranıyor.
 5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
@@ -44,8 +44,8 @@ Sadece üyelere (şimdilik):
 6. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
 
 Diğer ekranlar:
-- Görev detayı: başlık, ekip/proje, termin, durum, sorumlu ve destekçiler, açıklama, yorumlar. Eylemler: "Üstlen" / "Bırak" ve "Ata" (kişi seç).
-- Görev ekleme: sadece başlık zorunlu. Opsiyonel: proje, ekip, termin. "Kişi lazım" anahtarı (true/false). "Daha fazla alan" altında gizli ayrıntılar.
+- Görev detayı: başlık, ekip/proje, üst iş, termin, durum (planlama aşamasında / işlemde / bitmek üzere / bitti), tahmini gerekli kişi sayısı, katkı sağlayanlar ve destekçiler, açıklama, yorumlar. Eylemler: "Katkı sağlarım" / "Bırak", "Destek atabilirim" ve "Ata" (kişi seç).
+- Görev ekleme: sadece başlık zorunlu. Opsiyonel: proje, ekip, termin, "Tahmini Gerekli Kişi Sayısı" (boş bırakılırsa 1).
 
 ## Veri modeli (başlangıç)
 users(id, name, email, phone, active, created_at)
@@ -66,8 +66,8 @@ team_members(id, team_id, user_id, role_title, started_at, ended_at)
 projects(id, name, description, status, start_date, due_date, team_id NULL, created_by, created_at)
 
 tasks(id, project_id NULL, team_id NULL, parent_task_id NULL, title, description,
-      status ['todo' | 'doing' | 'done'], due_date NULL, completed_at NULL,
-      needs_assignee boolean default false,
+      status ['planning' | 'in_progress' | 'nearly_done' | 'done'] default 'planning', due_date NULL, completed_at NULL,
+      estimated_people integer default 1 (1..50),
       created_by, created_at, updated_at, last_activity_at, deleted_at NULL)
 
 task_assignments(id, task_id, user_id, role ['owner' | 'support' | 'approver'],
@@ -86,11 +86,12 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 - task_assignments: source='assigned' ise assigned_by dolu olmalı; source='claimed' ise assigned_by boş olmalı (CHECK: `(source = 'assigned') = (assigned_by IS NOT NULL)`).
 
 ## İş kuralları
-- Havuz = needs_assignee = true AND status <> 'done' AND deleted_at IS NULL AND aktif 'owner' ataması yok. Havuz ayrı tablo değil, bir sorgu/görünüm.
-- Üstlen: kişiye aktif 'owner' ataması oluşturur (source='claimed').
-- Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut sahibin ataması kapanır. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırak" diyerek işi geri verebilir.
-- Destek: aktif bir kullanıcı görevde 'support' kaydı oluşturabilir (source='claimed'). Üstlenince destek kaydı kapanır.
-- Bırak: ilgili atamanın ended_at alanını doldurur; needs_assignee hâlâ true ise iş kendiliğinden havuza döner.
+- Havuz = status <> 'done' AND deleted_at IS NULL AND aktif 'owner' sayısı < estimated_people. Havuz ayrı tablo değil, bir sorgu/görünüm.
+- Kapasite: aktif 'owner' sayısı estimated_people'ı geçemez. 'support' kayıtları kapasiteye sayılmaz ve sınırsızdır. Tahmini kişi sayısı mevcut 'owner' sayısının altına düşürülemez (409).
+- Katkı sağlarım: kişiye aktif 'owner' ataması oluşturur (source='claimed'). Kapasite doluysa 409 döner; aynı kişi ikinci kez katkı sağlayamaz.
+- Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut katkı sağlayanlar kalır; kapasite doluysa 409 döner. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırak" diyerek işi geri verebilir.
+- Destek atabilirim: aktif bir kullanıcı görevde 'support' kaydı oluşturabilir (source='claimed'). Katkı sağlarım ile destek kaydı kapanır.
+- Bırak: ilgili atamanın ended_at alanını doldurur; kapasite yeniden açılırsa iş kendiliğinden havuza döner.
 - Atama ve düzenleme yetkisi kararları aşağıdadır. Görünürlük kuralları tek modülde (server/src/policy/visibility.ts) toplanır; rotalar bu kuralları kendisi yeniden yazmaz.
 - Görevler sekmesi sıralaması: ORDER BY due_date ASC NULLS LAST, açık görevler.
 - Ekip sekmesi görünürlüğü: kullanıcının aktif team_members kaydından türetilir. Dernek sekmesi tüm giriş yapmış kullanıcılara açık.
@@ -107,12 +108,11 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 2. Atama yetkisi: Herkes herkese (aktif üyelere) atayabilir. Atanan kişinin onayı gerekmez; kişi isterse "Bırak" ile işi geri verir. Ekibe özel görevlerde yalnızca o ekibin aktif üyeleri atanabilir; ekibe özel yapılan görevde ekip dışı atanmış kişi varsa değişiklik reddedilir (409).
 3. Düzenleme ve silme: Aktif her kullanıcı görevi düzenleyebilir ve yumuşak silebilir. Ekibe özel görevler yalnızca o ekibin üyelerine ve atanmış kişilere görünür.
 4. İlerleme sayıları (Projeler): Gizli ekibe özel görevler de sayılır (kullanıcı kararı; bilinen bilgi sızıntısı riski kabul edildi).
-5. Destek rolü Aşama 3'te dahildir: 'support' kaydı, üstlenme ve bırakma ile aynı kurallarla çalışır.
+5. Destek rolü Aşama 3'te dahildir: 'support' kaydı, katkı sağlama ve bırakma ile aynı kurallarla çalışır, ama kapasiteye sayılmaz.
 
 ## Hâlâ açık
-1. Bir görev birden fazla kişi gerektirebilir mi? Şimdilik needs_assignee boolean.
-2. Dönem bitince üyelikler otomatik kapanır mı, yoksa "yenile" önerisi mi çıkar?
-3. Magic link için e-posta gönderim servisi (Aşama 2'de seçilecek). Geliştirme sırasında bağlantı konsola yazdırılır.
+1. Dönem bitince üyelikler otomatik kapanır mı, yoksa "yenile" önerisi mi çıkar?
+2. Magic link için e-posta gönderim servisi (Aşama 2'de seçilecek). Geliştirme sırasında bağlantı konsola yazdırılır.
 ## MVP kapsamı
 Dahil: users + e-posta ile şifresiz giriş (magic link), teams, team_members, projects, tasks, task_assignments (üstlenme ve atama), comments, task_history; yukarıdaki sekmeler ve ekranlar.
 Şimdilik dışında (sonraya bırak, şemayı bunlara engel olmayacak şekilde tut): workflow motoru, görev bağımlılıkları, bildirimler, tekrarlayan görevler, "sürekli sorumluluklar" (responsibilities tabloları), onay akışları, zaman takibi, raporlama panoları, kanban görünümü.

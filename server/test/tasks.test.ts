@@ -170,16 +170,27 @@ describe("havuz ve üstlenme", () => {
     await addMember(teamB, bob);
   });
 
-  test("sahipsiz görev havuzda, üstlenilince havuzdan çıkar", async () => {
-    const taskId = await createTask(alice, { needsAssignee: true });
+  test("tahmini kişi sayısı dolana kadar görev havuzda kalır", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: 2 });
     assert.ok((await listIds(bob, "/api/tasks/pool")).includes(taskId));
 
     assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, bob)).status, 200);
-    assert.ok(!(await listIds(alice, "/api/tasks/pool")).includes(taskId));
+    assert.ok((await listIds(alice, "/api/tasks/pool")).includes(taskId));
     assert.ok((await listIds(bob, "/api/tasks/mine")).includes(taskId));
+
+    const carol = await createUser("Kapasite");
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, carol)).status, 200);
+    assert.ok(!(await listIds(alice, "/api/tasks/pool")).includes(taskId));
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, alice)).status, 409);
   });
 
-  test("aynı anda iki üstlenme isteğinden yalnızca biri kabul edilir", async () => {
+  test("destek olan kişi kapasiteye sayılmaz ve havuzdan çıkarmaz", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: 1 });
+    assert.equal((await api("POST", `/api/tasks/${taskId}/support`, bob)).status, 200);
+    assert.ok((await listIds(alice, "/api/tasks/pool")).includes(taskId));
+  });
+
+  test("aynı anda iki katkı isteğinden yalnızca biri kabul edilir", async () => {
     const taskId = await createTask(alice, {});
     const [first, second] = await Promise.all([
       api("POST", `/api/tasks/${taskId}/claim`, alice),
@@ -192,6 +203,12 @@ describe("havuz ve üstlenme", () => {
       [taskId],
     );
     assert.equal(owners.rowCount, 1);
+  });
+
+  test("aynı kişi iki kez katkı sağlayamaz", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: 3 });
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, bob)).status, 200);
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, bob)).status, 409);
   });
 
   test("bırakılan görev tekrar havuza döner ve geçmişe kaydedilir", async () => {
@@ -225,21 +242,42 @@ describe("havuz ve üstlenme", () => {
     assert.equal(res.status, 400);
   });
 
-  test("atama önceki sahibi çıkarır ve destek kaydını sahipliğe çevirir", async () => {
-    const taskId = await createTask(alice, {});
+  test("atama kapasite dolu değilse katkı sağlayan ekler ve destek kaydını katkıya çevirir", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: 2 });
     await api("POST", `/api/tasks/${taskId}/claim`, alice);
     await api("POST", `/api/tasks/${taskId}/support`, bob);
 
     assert.equal((await api("POST", `/api/tasks/${taskId}/assign`, alice, { userId: bob })).status, 200);
 
     const rows = await query<{ user_id: string; role: string }>(
-      "SELECT user_id, role FROM task_assignments WHERE task_id = $1 AND ended_at IS NULL ORDER BY role",
+      "SELECT user_id, role FROM task_assignments WHERE task_id = $1 AND ended_at IS NULL ORDER BY role, user_id",
       [taskId],
     );
     assert.deepEqual(
       rows.rows.map((r) => [r.user_id, r.role]),
-      [[bob, "owner"]],
+      [[alice, "owner"], [bob, "owner"]],
     );
+  });
+
+  test("atama kapasite doluyken 409 döner", async () => {
+    const taskId = await createTask(alice, {});
+    await api("POST", `/api/tasks/${taskId}/claim`, alice);
+    assert.equal((await api("POST", `/api/tasks/${taskId}/assign`, alice, { userId: bob })).status, 409);
+  });
+
+  test("tahmini kişi sayısı mevcut katkı sağlayan sayısından az yapılamaz", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: 2 });
+    await api("POST", `/api/tasks/${taskId}/claim`, alice);
+    await api("POST", `/api/tasks/${taskId}/claim`, bob);
+    assert.equal((await api("PATCH", `/api/tasks/${taskId}`, alice, { estimatedPeople: 1 })).status, 409);
+  });
+
+  test("boş tahmini kişi sayısı 1 olarak kaydedilir, 0 ve 51 reddedilir", async () => {
+    const taskId = await createTask(alice, { estimatedPeople: "" });
+    const row = await query<{ estimated_people: number }>("SELECT estimated_people FROM tasks WHERE id = $1", [taskId]);
+    assert.equal(row.rows[0].estimated_people, 1);
+    assert.equal((await api("POST", "/api/tasks", alice, { title: "Sınır", estimatedPeople: 0 })).status, 400);
+    assert.equal((await api("POST", "/api/tasks", alice, { title: "Sınır", estimatedPeople: 51 })).status, 400);
   });
 
   test("destek olunan görevde ikinci kez destek veya üstlenme 409 döner", async () => {
@@ -296,7 +334,7 @@ describe("düzenleme, yorum ve silme", () => {
     let row = await query<{ completed_at: Date | null }>("SELECT completed_at FROM tasks WHERE id = $1", [taskId]);
     assert.notEqual(row.rows[0].completed_at, null);
 
-    await api("PATCH", `/api/tasks/${taskId}`, alice, { status: "doing" });
+    await api("PATCH", `/api/tasks/${taskId}`, alice, { status: "in_progress" });
     row = await query<{ completed_at: Date | null }>("SELECT completed_at FROM tasks WHERE id = $1", [taskId]);
     assert.equal(row.rows[0].completed_at, null);
   });
@@ -341,13 +379,13 @@ describe("projeler ilerleme sayıları", () => {
     assert.equal(created.status, 201);
     const projectId = ((await created.json()) as { id: string }).id;
 
-    const open = await createTask(alice, { projectId, needsAssignee: true });
+    const open = await createTask(alice, { projectId, estimatedPeople: 2 });
     const done = await createTask(alice, { projectId });
     await api("PATCH", `/api/tasks/${done}`, alice, { status: "done" });
     assert.ok(open);
 
     const res = await api("GET", `/api/projects/${projectId}`, alice);
     const body = (await res.json()) as { project: { progress: Record<string, number> } };
-    assert.deepEqual(body.project.progress, { total: 2, done: 1, percent: 50, needsAssignee: 1 });
+    assert.deepEqual(body.project.progress, { total: 2, done: 1, percent: 50, openCount: 1 });
   });
 });

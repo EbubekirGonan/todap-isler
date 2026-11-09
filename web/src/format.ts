@@ -1,21 +1,22 @@
 import type { TaskStatus } from './api';
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: 'Yapılacak',
-  doing: 'Yapılıyor',
-  done: 'Tamamlandı',
+  planning: 'Planlama aşamasında',
+  in_progress: 'İşlemde',
+  nearly_done: 'Bitmek üzere',
+  done: 'Bitti',
 };
 
 // Görev geçmişindeki alan adlarının Türkçe karşılıkları. Bilinmeyen alanlar olduğu gibi gösterilir.
 const HISTORY_LABELS: Record<string, string> = {
   created: 'Görevi oluşturdu',
   deleted: 'Görevi sildi',
-  owner: 'Sahibi değiştirdi',
+  owner: 'Katkı sağlayanları değiştirdi',
   support: 'Destek oldu',
   title: 'Başlığı değiştirdi',
   status: 'Durumu değiştirdi',
   team_only: 'Görünürlüğü değiştirdi',
-  needs_assignee: '"Kişi lazım" durumunu değiştirdi',
+  estimated_people: 'Tahmini kişi sayısını değiştirdi',
   description: 'Açıklamayı değiştirdi',
   due_date: 'Son tarihi değiştirdi',
 };

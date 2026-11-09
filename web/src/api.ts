@@ -81,7 +81,7 @@ export async function getMyTeams(): Promise<Team[]> {
   return data.teams;
 }
 
-export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskStatus = 'planning' | 'in_progress' | 'nearly_done' | 'done';
 
 export type Assignment = {
   userId: string;
@@ -100,7 +100,9 @@ export type Task = {
   description: string | null;
   status: TaskStatus;
   dueDate: string | null;
-  needsAssignee: boolean;
+  estimatedPeople: number;
+  parentTaskId: string | null;
+  parentTitle: string | null;
   teamOnly: boolean;
   createdBy: string;
   createdAt: string;
@@ -141,7 +143,7 @@ export type NewTask = {
   description: string | null;
   teamId: string | null;
   teamOnly: boolean;
-  needsAssignee: boolean;
+  estimatedPeople: number | null;
 };
 
 export async function listMyTasks(): Promise<Task[]> {
@@ -167,8 +169,21 @@ export function claimTask(taskId: string): Promise<void> {
   return request(`/api/tasks/${taskId}/claim`, { method: 'POST' });
 }
 
+export function supportTask(taskId: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/support`, { method: 'POST' });
+}
+
 export function releaseTask(taskId: string): Promise<void> {
   return request(`/api/tasks/${taskId}/release`, { method: 'POST' });
+}
+
+export type TaskPatch = {
+  status?: TaskStatus;
+  estimatedPeople?: number;
+};
+
+export function updateTask(taskId: string, patch: TaskPatch): Promise<void> {
+  return request(`/api/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
 export function assignTask(taskId: string, userId: string): Promise<void> {
