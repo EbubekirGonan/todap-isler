@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, verifyLoginLink, type CurrentUser } from './api';
 import { AppShell } from './components/AppShell';
 import { LoginScreen } from './components/LoginScreen';
+import { Spinner } from './components/Spinner';
 
 type Session =
   | { status: 'anonymous'; notice?: string }
@@ -52,7 +53,11 @@ export default function App() {
   }
 
   if (session === null) {
-    return <div className="flex min-h-dvh items-center justify-center text-slate-500">Yükleniyor…</div>;
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <Spinner />
+      </div>
+    );
   }
 
   if (session.status === 'anonymous') {

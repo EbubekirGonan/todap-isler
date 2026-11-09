@@ -44,7 +44,7 @@ Sadece üyelere (şimdilik):
 6. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
 
 Diğer ekranlar:
-- Görev detayı: başlık, ekip/proje, üst iş, termin, durum (planlama aşamasında / işlemde / bitmek üzere / bitti), tahmini gerekli kişi sayısı, katkı sağlayanlar ve destekçiler, açıklama, yorumlar. Eylemler: "Katkı sağlarım" / "Bırak", "Destek atabilirim" ve "Ata" (kişi seç).
+- Görev detayı: başlık, ekip/proje, üst iş, termin, durum (planlama aşamasında / işlemde / bitmek üzere / bitti), tahmini gerekli kişi sayısı, katkı sağlayanlar ve destekçiler, açıklama, yorumlar. Eylemler: "Katkı sağlarım" / "Bırakmak durumundayım", "Destek atabilirim" ve "İşlemler" menüsü (Düzenle, Başkasına ata). "Düzenle" aynı ekranda form açar (başlık, açıklama, tahmini kişi sayısı); ayrı pencere açılmaz.
 - Görev ekleme: sadece başlık zorunlu. Opsiyonel: proje, ekip, termin, "Tahmini Gerekli Kişi Sayısı" (boş bırakılırsa 1).
 
 ## Veri modeli (başlangıç)
@@ -89,9 +89,9 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 - Havuz = status <> 'done' AND deleted_at IS NULL AND aktif 'owner' sayısı < estimated_people. Havuz ayrı tablo değil, bir sorgu/görünüm.
 - Kapasite: aktif 'owner' sayısı estimated_people'ı geçemez. 'support' kayıtları kapasiteye sayılmaz ve sınırsızdır. Tahmini kişi sayısı mevcut 'owner' sayısının altına düşürülemez (409).
 - Katkı sağlarım: kişiye aktif 'owner' ataması oluşturur (source='claimed'). Kapasite doluysa 409 döner; aynı kişi ikinci kez katkı sağlayamaz.
-- Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut katkı sağlayanlar kalır; kapasite doluysa 409 döner. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırak" diyerek işi geri verebilir.
+- Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut katkı sağlayanlar kalır; kapasite doluysa 409 döner. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırakmak durumundayım" diyerek işi geri verebilir.
 - Destek atabilirim: aktif bir kullanıcı görevde 'support' kaydı oluşturabilir (source='claimed'). Katkı sağlarım ile destek kaydı kapanır.
-- Bırak: ilgili atamanın ended_at alanını doldurur; kapasite yeniden açılırsa iş kendiliğinden havuza döner.
+- Bırakmak durumundayım: ilgili atamanın ended_at alanını doldurur; kapasite yeniden açılırsa iş kendiliğinden havuza döner.
 - Atama ve düzenleme yetkisi kararları aşağıdadır. Görünürlük kuralları tek modülde (server/src/policy/visibility.ts) toplanır; rotalar bu kuralları kendisi yeniden yazmaz.
 - Görevler sekmesi sıralaması: ORDER BY due_date ASC NULLS LAST, açık görevler.
 - Ekip sekmesi görünürlüğü: kullanıcının aktif team_members kaydından türetilir. Dernek sekmesi tüm giriş yapmış kullanıcılara açık.

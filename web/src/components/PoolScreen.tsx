@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { claimTask, listPoolTasks, supportTask, type PoolScope } from '../api';
 import { useLoad } from '../useLoad';
 import { TaskCard } from './TaskCard';
+import { Spinner } from './Spinner';
 
 type Props = {
   reloadKey: number;
@@ -42,7 +43,7 @@ export function PoolScreen({ reloadKey, onOpenTask, onChanged }: Props) {
 
       {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
 
-      {loading && <p className="text-slate-600">Yükleniyor…</p>}
+      {loading && <Spinner />}
       {!loading && error && <p role="alert" className="text-red-700">{error}</p>}
       {!loading && !error && data && data.length === 0 && (
         <p className="text-slate-600">Havuzda bekleyen iş yok.</p>

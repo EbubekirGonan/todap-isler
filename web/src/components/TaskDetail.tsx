@@ -8,11 +8,14 @@ import {
   releaseTask,
   supportTask,
   updateTask,
+  type Task,
+  type TaskPatch,
   type TaskStatus,
 } from '../api';
 import { formatDateTime, historyLabel, STATUS_LABELS } from '../format';
 import { useLoad } from '../useLoad';
 import { Sheet } from './Sheet';
+import { Spinner } from './Spinner';
 import { TaskBadges } from './TaskCard';
 
 const STATUS_OPTIONS: TaskStatus[] = ['planning', 'in_progress', 'nearly_done', 'done'];
@@ -27,6 +30,8 @@ type Props = {
 export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props) {
   const [version, setVersion] = useState(0);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -66,49 +71,62 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
 
   return (
     <Sheet title={task?.title ?? 'Görev'} onClose={onClose}>
-      {loading && <p className="text-slate-600">Yükleniyor…</p>}
+      {loading && <Spinner label="Görev yükleniyor" />}
       {!loading && error && <p role="alert" className="text-red-700">{error}</p>}
 
       {task && (
         <div className="space-y-5">
           <TaskBadges task={task} />
 
-          {task.description && <p className="whitespace-pre-wrap text-slate-800">{task.description}</p>}
+          {!editing && task.description && <p className="whitespace-pre-wrap text-slate-800">{task.description}</p>}
 
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-slate-800">
-              Durum
-              <select
-                value={task.status}
-                disabled={busy}
-                onChange={(event) => runAction(() => updateTask(taskId, { status: event.target.value as TaskStatus }))}
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <EstimateField
-              key={version}
-              value={task.estimatedPeople}
+          {editing ? (
+            <TaskEditForm
+              task={task}
               ownerCount={owners.length}
               disabled={busy}
-              onSave={(value) => runAction(() => updateTask(taskId, { estimatedPeople: value }))}
+              onCancel={() => setEditing(false)}
+              onSave={async (patch) => {
+                if (await runAction(() => updateTask(taskId, patch))) setEditing(false);
+              }}
             />
-          </div>
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-slate-800">
+                Durum
+                <select
+                  value={task.status}
+                  disabled={busy}
+                  onChange={(event) => runAction(() => updateTask(taskId, { status: event.target.value as TaskStatus }))}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <div className="text-sm text-slate-600">
-            <p>
-              Katkı sağlayan ({owners.length}/{task.estimatedPeople}):{' '}
-              {owners.map((a) => a.name).join(', ') || 'yok'}
-            </p>
-            {supporters.length > 0 && <p>Destek: {supporters.map((a) => a.name).join(', ')}</p>}
-            <p className="text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
-          </div>
+              <div className="space-y-1 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">
+                  Katkı Sağlarım: {owners.length}/{task.estimatedPeople}
+                </p>
+                {owners.map((a) => (
+                  <p key={a.userId} className="pl-3">
+                    {a.name}
+                  </p>
+                ))}
+                <p className="pt-2 font-medium text-slate-900">Destek atabilirim: {supporters.length}</p>
+                {supporters.map((a) => (
+                  <p key={a.userId} className="pl-3">
+                    {a.name}
+                  </p>
+                ))}
+                <p className="pt-2 text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
+              </div>
+            </>
+          )}
 
           {!isDone && (
             <div className="flex flex-wrap gap-2">
@@ -139,17 +157,54 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                   onClick={() => runAction(() => releaseTask(taskId))}
                   className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
                 >
-                  Bırak
+                  Bırakmak durumundayım
                 </button>
               )}
-              <button
-                type="button"
-                aria-expanded={assignOpen}
-                onClick={() => setAssignOpen((open) => !open)}
-                className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800"
-              >
-                Ata
-              </button>
+              <div className="relative ml-auto">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800"
+                >
+                  İşlemler
+                </button>
+                {menuOpen && (
+                  <ul
+                    role="menu"
+                    className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-md bg-white text-sm shadow-lg ring-1 ring-slate-200"
+                  >
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setEditing(true);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
+                      >
+                        Düzenle
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-expanded={assignOpen}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setAssignOpen((open) => !open);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
+                      >
+                        Başkasına ata
+                      </button>
+                    </li>
+                  </ul>
+                )}
+              </div>
             </div>
           )}
 
@@ -225,41 +280,87 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
   );
 }
 
-type EstimateFieldProps = {
-  value: number;
+type TaskEditFormProps = {
+  task: Task;
   ownerCount: number;
   disabled: boolean;
-  onSave: (value: number) => Promise<boolean>;
+  onSave: (patch: TaskPatch) => Promise<void>;
+  onCancel: () => void;
 };
 
-// Tahmini kişi sayısı düzenleyici. Üst bileşen sürüm değişince key ile yeniden oluşturur.
-function EstimateField({ value, ownerCount, disabled, onSave }: EstimateFieldProps) {
-  const [text, setText] = useState(String(value));
-  const parsed = Number(text);
-  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 50 && parsed >= ownerCount;
+// Görev alanlarını yerinde düzenler. Üst bileşen düzenleme modunu açıp kapatır; ayrı pencere açılmaz.
+function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEditFormProps) {
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description ?? '');
+  const [estimate, setEstimate] = useState(String(task.estimatedPeople));
+  const parsedEstimate = Number(estimate);
+  const estimateValid =
+    Number.isInteger(parsedEstimate) && parsedEstimate >= 1 && parsedEstimate <= 50 && parsedEstimate >= ownerCount;
+  const valid = title.trim() !== '' && estimateValid;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!valid) return;
+    onSave({
+      title: title.trim(),
+      description: description.trim() || null,
+      estimatedPeople: parsedEstimate,
+    });
+  }
 
   return (
-    <div className="flex items-end gap-2">
-      <label className="block flex-1 text-sm font-medium text-slate-800">
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <label className="block text-sm font-medium text-slate-800">
+        Başlık
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          maxLength={200}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+        />
+      </label>
+      <label className="block text-sm font-medium text-slate-800">
+        Açıklama (isteğe bağlı)
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          maxLength={5000}
+          rows={4}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
+        />
+      </label>
+      <label className="block text-sm font-medium text-slate-800">
         Tahmini Gerekli Kişi Sayısı
         <input
           type="number"
           inputMode="numeric"
           min={Math.max(1, ownerCount)}
           max={50}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
+          value={estimate}
+          onChange={(event) => setEstimate(event.target.value)}
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
         />
+        <span className="mt-1 block text-xs font-normal text-slate-500">
+          En az {Math.max(1, ownerCount)} kişi olmalı (şu an {ownerCount} katkı sağlıyor).
+        </span>
       </label>
-      <button
-        type="button"
-        disabled={disabled || !valid || parsed === value}
-        onClick={() => onSave(parsed)}
-        className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
-      >
-        Kaydet
-      </button>
-    </div>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={disabled || !valid}
+          className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Kaydet
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCancel}
+          className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+        >
+          Vazgeç
+        </button>
+      </div>
+    </form>
   );
 }

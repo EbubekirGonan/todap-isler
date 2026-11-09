@@ -10,7 +10,6 @@ type Props = {
 
 export function TaskCard({ task, onOpen, actions }: Props) {
   const owners = task.assignments.filter((assignment) => assignment.role === 'owner');
-  const supporters = task.assignments.filter((assignment) => assignment.role === 'support');
 
   return (
     <article className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -19,10 +18,8 @@ export function TaskCard({ task, onOpen, actions }: Props) {
         <div className="mt-2">
           <TaskBadges task={task} />
         </div>
-        <p className="mt-2 text-sm text-slate-600">
-          {owners.length > 0 ? `Katkı sağlayan: ${owners.map((owner) => owner.name).join(', ')}` : 'Katkı sağlayan yok'}
-          {` (${owners.length}/${task.estimatedPeople})`}
-          {supporters.length > 0 && ` · Destek: ${supporters.map((supporter) => supporter.name).join(', ')}`}
+        <p className="mt-2 text-xs font-medium text-slate-600">
+          {owners.length}/{task.estimatedPeople}
         </p>
         <p className="mt-1 text-xs text-slate-500">Son hareket: {formatDateTime(task.lastActivityAt)}</p>
       </button>

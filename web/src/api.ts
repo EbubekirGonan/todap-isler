@@ -178,6 +178,8 @@ export function releaseTask(taskId: string): Promise<void> {
 }
 
 export type TaskPatch = {
+  title?: string;
+  description?: string | null;
   status?: TaskStatus;
   estimatedPeople?: number;
 };
