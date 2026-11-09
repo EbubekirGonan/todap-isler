@@ -105,6 +105,8 @@ export type Task = {
   parentTaskId: string | null;
   parentTitle: string | null;
   teamOnly: boolean;
+  // Ekibe özel görevlerde yalnızca ekip üyeleri katkı sağlayabilir ya da destek olabilir.
+  canJoin: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -203,4 +205,62 @@ export function addTaskComment(taskId: string, body: string): Promise<void> {
 export async function listUsers(): Promise<UserOption[]> {
   const data = await request<{ users: UserOption[] }>('/api/users');
   return data.users;
+}
+
+export type TaskListScope = 'all' | 'public' | 'mine-team';
+
+export type TaskListFilters = {
+  scope: TaskListScope;
+  includeDone: boolean;
+  seeking: boolean;
+};
+
+export async function listAllTasks(filters: TaskListFilters): Promise<Task[]> {
+  const params = new URLSearchParams({ scope: filters.scope });
+  if (filters.includeDone) params.set('includeDone', 'true');
+  if (filters.seeking) params.set('seeking', 'true');
+  const data = await request<{ tasks: Task[] }>(`/api/tasks?${params.toString()}`);
+  return data.tasks;
+}
+
+export type ProjectProgress = {
+  total: number;
+  done: number;
+  percent: number;
+  openCount: number;
+};
+
+// Faaliyet (sunucuda proje olarak tutulur).
+export type Project = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  startDate: string | null;
+  dueDate: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  progress: ProjectProgress;
+};
+
+export type NewProject = {
+  name: string;
+  description: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  teamId: string | null;
+};
+
+export async function listProjects(): Promise<Project[]> {
+  const data = await request<{ projects: Project[] }>('/api/projects');
+  return data.projects;
+}
+
+export async function listProjectTasks(projectId: string): Promise<Task[]> {
+  const data = await request<{ tasks: Task[] }>(`/api/projects/${projectId}/tasks`);
+  return data.tasks;
+}
+
+export function createProject(input: NewProject): Promise<{ id: string }> {
+  return request('/api/projects', { method: 'POST', body: JSON.stringify(input) });
 }

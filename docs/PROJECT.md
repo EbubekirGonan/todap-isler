@@ -36,8 +36,8 @@ Kullanıcıların çoğu telefondan girecek. İlk sürüm mobil öncelikli bir w
 Herkes için:
 1. İşlerim: Bana üstlendiğim veya bana atanmış aktif işler. Gruplar: Geciken / Bu hafta / Sonra. Altta "İş ekle" butonu.
 2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri.
-3. Projeler: Büyük çaplı işler. Kartta: ad, bitiş tarihi, ilerleme çubuğu ("8 görevin 5'i bitti"), "N görevde kişi aranıyor". Projenin içinde görevleri listelenir. "Proje ekle" butonu.
-4. Görevler: Tüm görevler tek liste. Varsayılan: yalnızca açık görevler, termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Amaç: bitmeyen işlerin bitmesine yönlendirmek. Filtreler: Açık/Bitenler, Proje, Kişi aranıyor.
+3. Faaliyetler (veri modelindeki projects tablosu): Büyük çaplı işler. Kartta: ad, ekip, ilerleme çubuğu ve yüzde, "N görevde kişi aranıyor". Karta dokununca faaliyetin görevleri listelenir. "Faaliyet ekle" butonu: ad zorunlu; açıklama, ekip, başlangıç ve bitiş tarihi isteğe bağlı. Faaliyet oluşturmak herkese açıktır.
+4. Tüm İşler: Sahibi kim olursa olsun tüm görevler tek liste (ekibe özel olanlar dahil; başlık ve durum herkese görünür). Yalnızca açık işler gösterilir, termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Filtre çipi yoktur.
 5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
 
 Sadece üyelere (şimdilik):
@@ -89,28 +89,29 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 - task_assignments: source='assigned' ise assigned_by dolu olmalı; source='claimed' ise assigned_by boş olmalı (CHECK: `(source = 'assigned') = (assigned_by IS NOT NULL)`).
 
 ## İş kuralları
-- Havuz = status <> 'done' AND deleted_at IS NULL AND aktif 'owner' sayısı < estimated_people. Havuz ayrı tablo değil, bir sorgu/görünüm.
+- Havuz = status <> 'done' AND deleted_at IS NULL AND team_only = false AND aktif 'owner' sayısı < estimated_people. Havuz ayrı tablo değil, bir sorgu/görünüm.
 - Kapasite: aktif 'owner' sayısı estimated_people'ı geçemez. 'support' kayıtları kapasiteye sayılmaz ve sınırsızdır. Tahmini kişi sayısı mevcut 'owner' sayısının altına düşürülemez (409).
 - Katkı sağlarım: kişiye aktif 'owner' ataması oluşturur (source='claimed'). Kapasite doluysa 409 döner; aynı kişi ikinci kez katkı sağlayamaz.
 - Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut katkı sağlayanlar kalır; kapasite doluysa 409 döner. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırakmak durumundayım" diyerek işi geri verebilir.
 - Destek atabilirim: aktif bir kullanıcı görevde 'support' kaydı oluşturabilir (source='claimed'). Katkı sağlarım ile destek kaydı kapanır.
 - Bırakmak durumundayım: ilgili atamanın ended_at alanını doldurur; kapasite yeniden açılırsa iş kendiliğinden havuza döner.
 - Atama ve düzenleme yetkisi kararları aşağıdadır. Görünürlük kuralları tek modülde (server/src/policy/visibility.ts) toplanır; rotalar bu kuralları kendisi yeniden yazmaz.
-- Görevler sekmesi sıralaması: ORDER BY due_date ASC NULLS LAST, açık görevler.
+- Tüm İşler sekmesi sıralaması: ORDER BY due_date ASC NULLS LAST, varsayılan olarak açık görevler.
 - Ekip sekmesi görünürlüğü: kullanıcının aktif team_members kaydından türetilir. Dernek sekmesi tüm giriş yapmış kullanıcılara açık.
 - Her görev değişikliği (durum, atama, üstlenme, bırakma, termin, kişi lazım bayrağı) task_history'ye yazılır; her harekette tasks.last_activity_at güncellenir.
 - Üyelik ve atamalarda geçmiş korunur: silme yerine ended_at.
 
 ## Kararlar
 1. Görünürlük: Görev eklerken "Ekibe özel" onay kutusu vardır (ekip seçiliyse aktif). İşaretliyse görev yalnızca o ekibin aktif üyelerine görünür (tasks.team_only = true, team_id zorunlu: CHECK (NOT team_only OR team_id IS NOT NULL)).
-   - Havuz ve Görevler sekmelerinde varsayılan: yalnızca herkese açık görevler (team_only = false).
+   - Ekibe özel bir görevin başlığı, durumu ve detayı herkese görünür (Tüm İşler, Faaliyetler, detay). Yalnızca o ekibin aktif üyeleri katkı sağlayabilir ya da destek olabilir; üye olmayanlarda "Katkı sağlarım" ve "Destek atabilirim" butonları gizlenir (sunucuda da 409 döner).
+   - Havuz yalnızca herkese açık görevleri gösterir (team_only = false). Ekibe özel görevler Havuz'da görünmez.
    - "Bana özel" filtresi: kullanıcının aktif üyesi olduğu ekiplerin ekibe özel görevlerini gösterir.
    - Ekip sekmesi: o ekibin tüm görevlerini (açık + ekibe özel) üyelere gösterir.
    - İşlerim: kullanıcıya atanmış görevler görünürlük ne olursa olsun görünür.
-   - Görünürlük koşulu tek bir yerde (ortak SQL parçası/fonksiyon) tanımlanır.
+   - Görünürlük kuralı tek bir modülde (server/src/policy/visibility.ts) tanımlanır; route'lara dağıtılmaz.
 2. Atama yetkisi: Herkes herkese (aktif üyelere) atayabilir. Atanan kişinin onayı gerekmez; kişi isterse "Bırak" ile işi geri verir. Ekibe özel görevlerde yalnızca o ekibin aktif üyeleri atanabilir; ekibe özel yapılan görevde ekip dışı atanmış kişi varsa değişiklik reddedilir (409).
-3. Düzenleme ve silme: Aktif her kullanıcı görevi düzenleyebilir ve yumuşak silebilir. Ekibe özel görevler yalnızca o ekibin üyelerine ve atanmış kişilere görünür.
-4. İlerleme sayıları (Projeler): Gizli ekibe özel görevler de sayılır (kullanıcı kararı; bilinen bilgi sızıntısı riski kabul edildi).
+3. Düzenleme ve silme: Aktif her kullanıcı görevi düzenleyebilir ve yumuşak silebilir.
+4. İlerleme sayıları (Faaliyetler): Ekibe özel görevler de sayılır (kullanıcı kararı; başlığı herkese görünen görevlerin sayısına dahil edilir).
 5. Destek rolü Aşama 3'te dahildir: 'support' kaydı, katkı sağlama ve bırakma ile aynı kurallarla çalışır, ama kapasiteye sayılmaz.
 
 ## Hâlâ açık

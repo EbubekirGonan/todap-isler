@@ -116,17 +116,31 @@ describe("görünürlük kuralları", () => {
     await addMember(teamA, bob);
   });
 
-  test("ekibe özel görev dışarıdaki kişiden gizlenir (404 ve listede yok)", async () => {
+  test("ekibe özel görev herkese görünür ama üye olmayan katılamaz", async () => {
     const taskId = await createTask(alice, { teamId: teamA, teamOnly: true });
 
-    const hidden = await api("GET", `/api/tasks/${taskId}`, carol);
-    assert.equal(hidden.status, 404);
-    assert.ok(!(await listIds(carol, "/api/tasks")).includes(taskId));
-    assert.ok(!(await listIds(carol, "/api/tasks/pool")).includes(taskId));
+    const seenByOutsider = await api("GET", `/api/tasks/${taskId}`, carol);
+    assert.equal(seenByOutsider.status, 200);
+    const outsiderBody = (await seenByOutsider.json()) as { task: { canJoin: boolean } };
+    assert.equal(outsiderBody.task.canJoin, false);
+    assert.ok((await listIds(carol, "/api/tasks")).includes(taskId));
 
-    const visible = await api("GET", `/api/tasks/${taskId}`, bob);
-    assert.equal(visible.status, 200);
-    assert.ok((await listIds(bob, "/api/tasks")).includes(taskId));
+    const member = await api("GET", `/api/tasks/${taskId}`, bob);
+    const memberBody = (await member.json()) as { task: { canJoin: boolean } };
+    assert.equal(memberBody.task.canJoin, true);
+  });
+
+  test("ekibe özel görev havuzda görünmez", async () => {
+    const taskId = await createTask(alice, { teamId: teamA, teamOnly: true });
+    assert.ok(!(await listIds(carol, "/api/tasks/pool")).includes(taskId));
+    assert.ok(!(await listIds(bob, "/api/tasks/pool")).includes(taskId));
+  });
+
+  test("üye olmayan katkı sağlayamaz ya da destek olamaz (409)", async () => {
+    const taskId = await createTask(alice, { teamId: teamA, teamOnly: true });
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, carol)).status, 409);
+    assert.equal((await api("POST", `/api/tasks/${taskId}/support`, carol)).status, 409);
+    assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, bob)).status, 200);
   });
 
   test("ekibe özel görev için ekip seçilmezse 400 döner", async () => {
@@ -406,5 +420,30 @@ describe("projeler ilerleme sayıları", () => {
     const res = await api("GET", `/api/projects/${projectId}`, alice);
     const body = (await res.json()) as { project: { progress: Record<string, number> } };
     assert.deepEqual(body.project.progress, { total: 2, done: 1, percent: 50, openCount: 1 });
+  });
+
+  test("faaliyet görev listesi tamamlananları da içerir ve kişi aranıyor filtresi çalışır", async () => {
+    const alice = await createUser("Gül");
+    const created = await api("POST", "/api/projects", alice, { name: "Piknik" });
+    const projectId = ((await created.json()) as { id: string }).id;
+
+    const seeking = await createTask(alice, { projectId, estimatedPeople: 2 });
+    const finished = await createTask(alice, { projectId });
+    await api("PATCH", `/api/tasks/${finished}`, alice, { status: "done" });
+
+    const all = await listIds(alice, `/api/projects/${projectId}/tasks`);
+    assert.ok(all.includes(seeking) && all.includes(finished));
+
+    const openOnly = await listIds(alice, "/api/tasks?seeking=true");
+    assert.ok(openOnly.includes(seeking));
+    assert.ok(!openOnly.includes(finished));
+
+    const withDone = await listIds(alice, "/api/tasks?includeDone=true");
+    assert.ok(withDone.includes(finished));
+  });
+
+  test("bilinmeyen faaliyet için görev listesi 404 döner", async () => {
+    const alice = await createUser("Hasan");
+    assert.equal((await api("GET", "/api/projects/999999/tasks", alice)).status, 404);
   });
 });

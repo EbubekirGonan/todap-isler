@@ -1,7 +1,7 @@
 import type pg from "pg";
 import { query, withTransaction } from "../db.js";
 import { HttpError } from "../http-error.js";
-import { isActiveTeamMember, scopeSql, visibleToUserSql, type TaskScope } from "../policy/visibility.js";
+import { activeTeamIds, canJoinTask, isActiveTeamMember, poolSql, scopeSql, visibleToUserSql, type TaskScope } from "../policy/visibility.js";
 
 export const TASK_STATUSES = ["planning", "in_progress", "nearly_done", "done"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -34,6 +34,10 @@ export type TaskFilters = {
   scope: TaskScope;
   status?: TaskStatus;
   projectId?: string;
+  // Durum verilmemişse varsayılan olarak tamamlananlar gizlenir; bu bayrak onları da ekler.
+  includeDone?: boolean;
+  // Yalnızca tahmini kişi sayısına ulaşılmamış görevler (kişi aranıyor).
+  seeking?: boolean;
 };
 
 type AssignmentRow = { userId: string; name: string; role: string; source: string };
@@ -92,9 +96,9 @@ const TASK_SELECT = `
     LEFT JOIN teams tm ON tm.id = t.team_id
     LEFT JOIN tasks parent ON parent.id = t.parent_task_id`;
 
-// Ürün kuralları: görev düzenlenebilir ve silinebilir (herkes), ekibe özel görevlere yalnızca ekip üyeleri atanabilir.
+// Ürün kuralları: görev düzenlenebilir ve silinebilir (herkes), ekibe özel görevlere yalnızca ekip üyeleri katılabilir.
 // Katkı sağlayan (owner) kişi sayısı tahmini gerekli kişi sayısını geçemez; destek (support) kaydı sayılmaz.
-function toTaskDto(row: TaskRow) {
+function toTaskDto(row: TaskRow, teamIds: Set<string>) {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -111,6 +115,7 @@ function toTaskDto(row: TaskRow) {
     completedAt: row.completed_at,
     estimatedPeople: row.estimated_people,
     teamOnly: row.team_only,
+    canJoin: canJoinTask(row, teamIds),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -124,29 +129,35 @@ const OWNER_COUNT_SQL = `(SELECT COUNT(*) FROM task_assignments a
                            WHERE a.task_id = t.id AND a.role = 'owner' AND a.ended_at IS NULL)`;
 
 export async function listTasks(userId: string, filters: TaskFilters) {
-  const params: unknown[] = [userId];
-  const conditions = ["t.deleted_at IS NULL", visibleToUserSql("$1"), scopeSql(filters.scope, "$1")];
+  const params: unknown[] = [];
+  const bind = (value: unknown) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  const conditions = [visibleToUserSql(), scopeSql(filters.scope, filters.scope === "mine-team" ? bind(userId) : "NULL")];
 
   if (filters.view === "mine") {
     conditions.push(
-      "EXISTS (SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.user_id = $1 AND a.ended_at IS NULL)",
+      `EXISTS (SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.user_id = ${bind(userId)} AND a.ended_at IS NULL)`,
     );
   }
   if (filters.view === "pool") {
+    conditions.push(poolSql());
+  }
+  if (filters.view === "pool" || filters.seeking) {
     conditions.push(`${OWNER_COUNT_SQL} < t.estimated_people`);
   }
 
   if (filters.status) {
-    params.push(filters.status);
-    conditions.push(`t.status = $${params.length}`);
-  } else {
+    conditions.push(`t.status = ${bind(filters.status)}`);
+  } else if (!filters.includeDone) {
     conditions.push("t.status <> 'done'");
   }
   if (filters.projectId) {
-    params.push(filters.projectId);
-    conditions.push(`t.project_id = $${params.length}`);
+    conditions.push(`t.project_id = ${bind(filters.projectId)}`);
   }
 
+  const teamIds = await activeTeamIds(userId);
   // En gecikmişten başlayan sıralama: en erken son tarih önce, tarihsizler sonda.
   const result = await query<TaskRow>(
     `${TASK_SELECT}
@@ -154,15 +165,11 @@ export async function listTasks(userId: string, filters: TaskFilters) {
       ORDER BY t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC`,
     params,
   );
-  return result.rows.map(toTaskDto);
+  return result.rows.map((row) => toTaskDto(row, teamIds));
 }
 
 export async function getTask(userId: string, taskId: string) {
-  const result = await query<TaskRow>(
-    `${TASK_SELECT}
-      WHERE t.id = $1 AND t.deleted_at IS NULL AND ${visibleToUserSql("$2")}`,
-    [taskId, userId],
-  );
+  const result = await query<TaskRow>(`${TASK_SELECT} WHERE t.id = $1 AND ${visibleToUserSql()}`, [taskId]);
   const row = result.rows[0];
   if (!row) {
     return null;
@@ -185,7 +192,7 @@ export async function getTask(userId: string, taskId: string) {
     [taskId],
   );
 
-  return { ...toTaskDto(row), comments: comments.rows, history: history.rows };
+  return { ...toTaskDto(row, await activeTeamIds(userId)), comments: comments.rows, history: history.rows };
 }
 
 export async function createTask(userId: string, input: NewTaskInput): Promise<string> {
@@ -335,6 +342,7 @@ export async function claimTask(userId: string, taskId: string): Promise<void> {
     if (task.status === "done") {
       throw new HttpError(409, "Tamamlanmış görev üstlenilemez.");
     }
+    await assertCanJoin(client, task, userId, "Ekibe özel göreve yalnızca ekip üyeleri katkı sağlayabilir.");
     if (await isOwner(client, taskId, userId)) {
       throw new HttpError(409, "Bu görevde zaten katkı sağlıyorsunuz.");
     }
@@ -374,6 +382,7 @@ export async function supportTask(userId: string, taskId: string): Promise<void>
     if (task.status === "done") {
       throw new HttpError(409, "Tamamlanmış göreve destek olunamaz.");
     }
+    await assertCanJoin(client, task, userId, "Ekibe özel göreve yalnızca ekip üyeleri destek olabilir.");
     const existing = await client.query(
       "SELECT 1 FROM task_assignments WHERE task_id = $1 AND user_id = $2 AND ended_at IS NULL",
       [taskId, userId],
@@ -449,15 +458,30 @@ async function lockVisibleTask(client: pg.PoolClient, userId: string, taskId: st
     `SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date,
             t.team_only, t.estimated_people
        FROM tasks t
-      WHERE t.id = $1 AND t.deleted_at IS NULL AND ${visibleToUserSql("$2")}
+      WHERE t.id = $1 AND ${visibleToUserSql()}
       FOR UPDATE OF t`,
-    [taskId, userId],
+    [taskId],
   );
   const row = result.rows[0];
   if (!row) {
     throw new HttpError(404, "Görev bulunamadı.");
   }
   return row;
+}
+
+// Ekibe özel görevlerde katılımı yalnızca o ekibin aktif üyeleri yapabilir. Üye değilse 409 döner.
+async function assertCanJoin(
+  client: pg.PoolClient,
+  task: TaskBaseRow,
+  userId: string,
+  message: string,
+): Promise<void> {
+  if (!task.team_only) {
+    return;
+  }
+  if (!task.team_id || !(await isActiveTeamMember(client, task.team_id, userId))) {
+    throw new HttpError(409, message);
+  }
 }
 
 async function ensureProjectAndTeam(

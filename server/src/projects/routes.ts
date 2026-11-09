@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../auth/session.js";
 import { query } from "../db.js";
 import { HttpError } from "../http-error.js";
+import { listTasks } from "../tasks/service.js";
 import { asObject, parseId, parseOptionalDate, parseOptionalId, parseOptionalText, parseRequiredText } from "../validation.js";
 
 export const projectsRouter = Router();
@@ -76,6 +77,17 @@ projectsRouter.get("/:id", async (req, res) => {
     throw new HttpError(404, "Proje bulunamadı.");
   }
   res.json({ project: toProjectDto(row) });
+});
+
+// Faaliyetin görevleri (tamamlananlar dahil), en gecikmişten başlayarak.
+projectsRouter.get("/:id/tasks", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz proje kimliği.");
+  const exists = await query("SELECT 1 FROM projects WHERE id = $1", [id]);
+  if (!exists.rowCount) {
+    throw new HttpError(404, "Proje bulunamadı.");
+  }
+  const tasks = await listTasks(req.user!.id, { view: "all", scope: "all", projectId: id, includeDone: true });
+  res.json({ tasks });
 });
 
 projectsRouter.post("/", async (req, res) => {

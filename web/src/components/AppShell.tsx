@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getMyTeams, logout, type CurrentUser, type Team } from '../api';
+import { AllTasksScreen } from './AllTasksScreen';
 import { MyTasksScreen } from './MyTasksScreen';
 import { PoolScreen } from './PoolScreen';
+import { ProjectsScreen } from './ProjectsScreen';
 import { TabBar, type TabItem } from './TabBar';
 import { TaskDetail } from './TaskDetail';
 import { TaskForm } from './TaskForm';
@@ -15,8 +17,8 @@ type Props = {
 const FIXED_TABS: TabItem[] = [
   { key: 'mine', label: 'İşlerim' },
   { key: 'pool', label: 'Havuz' },
-  { key: 'projects', label: 'Projeler' },
-  { key: 'tasks', label: 'Görevler' },
+  { key: 'projects', label: 'Faaliyetler' },
+  { key: 'tasks', label: 'Tüm İşler' },
   { key: 'association', label: 'Dernek' },
 ];
 
@@ -48,6 +50,7 @@ export function AppShell({ user, onSignedOut }: Props) {
   const tabs = [...FIXED_TABS, ...teamTabs];
   const activeTeam = teams?.find((team) => `team:${team.id}` === activeKey) ?? null;
   const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
+  const showsProjectScreens = activeKey === 'projects' || activeKey === 'tasks';
 
   function refreshLists() {
     setReloadKey((value) => value + 1);
@@ -91,13 +94,24 @@ export function AppShell({ user, onSignedOut }: Props) {
             onChanged={refreshLists}
           />
         )}
-        {!showsTaskActions && activeTeam && (
+        {activeKey === 'projects' && (
+          <ProjectsScreen
+            reloadKey={reloadKey}
+            teams={teams ?? []}
+            onOpenTask={(id) => setOpenTask(id)}
+            onChanged={refreshLists}
+          />
+        )}
+        {activeKey === 'tasks' && (
+          <AllTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
+        )}
+        {!showsTaskActions && !showsProjectScreens && activeTeam && (
           <TabPlaceholder
             title={activeTeam.name}
             text={activeTeam.role_title ? `Rolünüz: ${activeTeam.role_title}` : 'Ekip içeriği sonraki aşamalarda eklenecek.'}
           />
         )}
-        {!showsTaskActions && !activeTeam && (
+        {!showsTaskActions && !showsProjectScreens && !activeTeam && (
           <TabPlaceholder
             title={FIXED_TAB_TITLES[activeKey] ?? 'Todap'}
             text="Bu ekranın içeriği sonraki aşamalarda eklenecek."

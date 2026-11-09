@@ -61,13 +61,22 @@ function parseEstimatedPeople(value: unknown): number {
   return count;
 }
 
+function parseFlag(value: unknown): boolean {
+  return value === "true" || value === "1";
+}
+
 function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskFilters {
   const scope = query.scope ?? "all";
   if (typeof scope !== "string" || !SCOPES.includes(scope as TaskScope)) {
     throw new HttpError(400, "Geçersiz kapsam.");
   }
 
-  const filters: TaskFilters = { view, scope: scope as TaskScope };
+  const filters: TaskFilters = {
+    view,
+    scope: scope as TaskScope,
+    includeDone: parseFlag(query.includeDone),
+    seeking: parseFlag(query.seeking),
+  };
   if (query.status !== undefined) {
     filters.status = parseStatus(query.status);
   }

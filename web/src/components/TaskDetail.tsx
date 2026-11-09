@@ -139,7 +139,7 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
 
           {!isDone && (
             <div className="flex flex-wrap gap-2">
-              {!isOwnerMine && (
+              {!isOwnerMine && task.canJoin && (
                 <button
                   type="button"
                   disabled={busy}
@@ -151,7 +151,7 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                   Katkı sağlarım
                 </button>
               )}
-              {!isSupporterMine && !isOwnerMine && (
+              {!isSupporterMine && !isOwnerMine && task.canJoin && (
                 <button
                   type="button"
                   disabled={busy}
