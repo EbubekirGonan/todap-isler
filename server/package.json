@@ -13,7 +13,8 @@
     "start": "node dist/index.js",
     "migrate": "node-pg-migrate up -m migrations --envPath ../.env",
     "migrate:down": "node-pg-migrate down -m migrations --envPath ../.env",
-    "seed": "tsx seed/seed.ts"
+    "seed": "tsx seed/seed.ts",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,7 @@
   "dependencies": {
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
     "pg": "^8.23.1"
   },
   "devDependencies": {

@@ -25,7 +25,8 @@ Kullanıcıların çoğu telefondan girecek. İlk sürüm mobil öncelikli bir w
 ## Giriş akışı (magic link)
 - Sistem kapalıdır: yalnızca users tablosuna daha önce eklenmiş e-postalar giriş yapabilir; açık kayıt yok.
 - Kullanıcı e-postasını girer. Sistem kısa ömürlü (ör. 15 dk), tek kullanımlık, kriptografik olarak rastgele bir token üretir. Veritabanında token'ın sadece hash'i saklanır. E-postaya bağlantı gider.
-- Bağlantıya tıklanınca token doğrulanır (var mı, süresi dolmuş mu, kullanılmış mı), kullanıldı olarak işaretlenir ve oturum açılır (httpOnly, secure çerez; uzun ömürlü, ör. 30 gün).
+- Bağlantıya tıklanınca token doğrulanır (var mı, süresi dolmuş mu, kullanılmış mı), kullanıldı olarak işaretlenir ve oturum açılır (httpOnly, secure çerez; 30 gün hareketsizlik süresi, her etkinlikte kayar).
+- Giriş bağlantısı `#token=` parçasında gider; token URL sorgusunda olmadığı için sunucu günlüklerine düşmez. Sayfa token'ı POST ile tüketir; e-posta tarayıcılarının GET ön taraması tokenı yakmaz.
 - E-posta kayıtlı olsun ya da olmasın aynı nötr yanıt döner ("Kayıtlıysa bağlantı gönderdik"); böylece e-posta adresi sorgulaması engellenir. İstek sayısına sınır (rate limit) koy.
 - iOS'ta ana ekrana eklenen PWA'nın oturumu Safari'den ayrı kalabildiği için, bağlantıya ek olarak 6 haneli e-posta kodu ile giriş seçeneğini de değerlendir ve öner.
 
@@ -49,7 +50,12 @@ Diğer ekranlar:
 ## Veri modeli (başlangıç)
 users(id, name, email, phone, active, created_at)
 
-login_tokens(id, user_id, token_hash, code_hash NULL, expires_at, used_at NULL, created_at)
+login_tokens(id, user_id, token_hash, code_hash, attempts default 0, expires_at, used_at NULL, created_at)
+  - Bağlantı token'ı ve 6 haneli kod aynı satırda tutulur; ikisi de HMAC-SHA256 (SESSION_SECRET) ile hash'lenir. code_hash zorunludur.
+  - attempts: yanlış kod sayacı; 5'e ulaşınca kod artık denenmez.
+
+sessions(id, user_id, token_hash, created_at, last_seen_at, revoked_at NULL)
+  - Oturum çerezi (todap_session) opak bir token'dır; sadece hash'i saklanır. Hareketsizlik süresi 30 gün ve kaydırmalıdır.
 
 teams(id, name, description, type ['term' | 'ongoing'], term_start, term_end, created_at)
   - 'term' = dönemli (ör. Yönetim Kurulu, 2 yıl); 'ongoing' = süresiz (ör. Sosyal medya ekibi); ongoing'de term_end boş.

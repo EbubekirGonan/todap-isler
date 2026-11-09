@@ -36,4 +36,5 @@ export const config = {
   port,
   sessionSecret: process.env.SESSION_SECRET as string,
   appBaseUrl: process.env.APP_BASE_URL as string,
+  isProduction: process.env.NODE_ENV === "production",
 };

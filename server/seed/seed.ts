@@ -384,7 +384,7 @@ async function main() {
   try {
     await client.query("BEGIN");
     await client.query(
-      "TRUNCATE task_history, task_comments, task_assignments, tasks, projects, team_members, teams, users RESTART IDENTITY CASCADE",
+      "TRUNCATE sessions, login_tokens, task_history, task_comments, task_assignments, tasks, projects, team_members, teams, users RESTART IDENTITY CASCADE",
     );
 
     const users = await seedUsers(client);

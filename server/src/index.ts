@@ -1,20 +1,12 @@
-import express from "express";
+import { createApp } from "./app.js";
 import { config } from "./config.js";
-import { query } from "./db.js";
 
-const app = express();
+// Canlı e-posta sağlayıcısı Faz 8'de bağlanana kadar üretimde giriş e-postası gönderilemez.
+if (config.isProduction) {
+  console.error("Üretim ortamında e-posta sağlayıcısı henüz yapılandırılmadı; sunucu başlatılmıyor.");
+  process.exit(1);
+}
 
-app.use(express.json());
-
-app.get("/api/health", async (_req, res) => {
-  try {
-    await query("SELECT 1");
-    res.json({ status: "ok", db: "ok" });
-  } catch {
-    res.status(503).json({ status: "error", db: "unreachable" });
-  }
-});
-
-app.listen(config.port, () => {
+createApp().listen(config.port, () => {
   console.log(`API çalışıyor: http://localhost:${config.port}`);
 });
