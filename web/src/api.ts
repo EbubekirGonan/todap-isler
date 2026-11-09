@@ -80,3 +80,106 @@ export async function getMyTeams(): Promise<Team[]> {
   const data = await request<{ teams: Team[] }>('/api/teams/mine');
   return data.teams;
 }
+
+export type TaskStatus = 'todo' | 'doing' | 'done';
+
+export type Assignment = {
+  userId: string;
+  name: string;
+  role: 'owner' | 'support';
+  source: string;
+};
+
+export type Task = {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  dueDate: string | null;
+  needsAssignee: boolean;
+  teamOnly: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+  assignments: Assignment[];
+};
+
+export type TaskComment = {
+  id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+};
+
+export type TaskHistoryEntry = {
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+  actor_name: string;
+};
+
+export type TaskDetail = Task & {
+  comments: TaskComment[];
+  history: TaskHistoryEntry[];
+};
+
+export type UserOption = {
+  id: string;
+  name: string;
+};
+
+export type PoolScope = 'public' | 'mine-team';
+
+export type NewTask = {
+  title: string;
+  description: string | null;
+  teamId: string | null;
+  teamOnly: boolean;
+  needsAssignee: boolean;
+};
+
+export async function listMyTasks(): Promise<Task[]> {
+  const data = await request<{ tasks: Task[] }>('/api/tasks/mine');
+  return data.tasks;
+}
+
+export async function listPoolTasks(scope: PoolScope): Promise<Task[]> {
+  const data = await request<{ tasks: Task[] }>(`/api/tasks/pool?scope=${scope}`);
+  return data.tasks;
+}
+
+export async function getTask(taskId: string): Promise<TaskDetail> {
+  const data = await request<{ task: TaskDetail }>(`/api/tasks/${taskId}`);
+  return data.task;
+}
+
+export function createTask(input: NewTask): Promise<{ id: string }> {
+  return request('/api/tasks', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function claimTask(taskId: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/claim`, { method: 'POST' });
+}
+
+export function releaseTask(taskId: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/release`, { method: 'POST' });
+}
+
+export function assignTask(taskId: string, userId: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/assign`, { method: 'POST', body: JSON.stringify({ userId }) });
+}
+
+export function addTaskComment(taskId: string, body: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+}
+
+export async function listUsers(): Promise<UserOption[]> {
+  const data = await request<{ users: UserOption[] }>('/api/users');
+  return data.users;
+}

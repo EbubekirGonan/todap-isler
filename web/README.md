@@ -24,4 +24,4 @@ npm run preview    # üretim derlemesini yerelde açar
 
 ## Kapsam
 
-Bu aşamada giriş ekranı, API istemcisi, sekme çubuğu (ekip sekmeleri üyeliğe göre gelir) ve PWA ayarları vardır. Sekmelerin içerikleri sonraki aşamalarda eklenecek; bkz. [docs/ROADMAP-2026-11-09.md](../docs/ROADMAP-2026-11-09.md).
+Bu aşamada giriş ekranı, API istemcisi, sekme çubuğu (ekip sekmeleri üyeliğe göre gelir), PWA ayarları ve İşlerim / Havuz ekranları vardır. Havuz'da üstlenme, atama ve "Bana özel" filtresi çalışır; iş ekleme ve görev detayı (yorum, bırak, atama, geçmiş) bir alt katman olarak açılır. Projeler, Görevler ve Dernek sekmeleri sonraki aşamalarda eklenecek; bkz. [docs/ROADMAP-2026-11-09.md](../docs/ROADMAP-2026-11-09.md).

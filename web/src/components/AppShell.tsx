@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getMyTeams, logout, type CurrentUser, type Team } from '../api';
+import { MyTasksScreen } from './MyTasksScreen';
+import { PoolScreen } from './PoolScreen';
 import { TabBar, type TabItem } from './TabBar';
+import { TaskDetail } from './TaskDetail';
+import { TaskForm } from './TaskForm';
+
 
 type Props = {
   user: CurrentUser;
@@ -21,6 +26,9 @@ export function AppShell({ user, onSignedOut }: Props) {
   const [teams, setTeams] = useState<Team[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState('mine');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [openTask, setOpenTask] = useState<{ id: string; assignNow: boolean } | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +47,11 @@ export function AppShell({ user, onSignedOut }: Props) {
   const teamTabs: TabItem[] = (teams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
   const tabs = [...FIXED_TABS, ...teamTabs];
   const activeTeam = teams?.find((team) => `team:${team.id}` === activeKey) ?? null;
+  const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
+
+  function refreshLists() {
+    setReloadKey((value) => value + 1);
+  }
 
   async function handleLogout() {
     try {
@@ -67,19 +80,62 @@ export function AppShell({ user, onSignedOut }: Props) {
         </p>
       )}
 
-      <main className="flex-1 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
-        {activeTeam ? (
+      <main className="flex-1 px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-5">
+        {activeKey === 'mine' && (
+          <MyTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask({ id, assignNow: false })} />
+        )}
+        {activeKey === 'pool' && (
+          <PoolScreen
+            reloadKey={reloadKey}
+            onOpenTask={(id, assignNow) => setOpenTask({ id, assignNow })}
+            onChanged={refreshLists}
+          />
+        )}
+        {!showsTaskActions && activeTeam && (
           <TabPlaceholder
             title={activeTeam.name}
             text={activeTeam.role_title ? `Rolünüz: ${activeTeam.role_title}` : 'Ekip içeriği sonraki aşamalarda eklenecek.'}
           />
-        ) : (
+        )}
+        {!showsTaskActions && !activeTeam && (
           <TabPlaceholder
             title={FIXED_TAB_TITLES[activeKey] ?? 'Todap'}
             text="Bu ekranın içeriği sonraki aşamalarda eklenecek."
           />
         )}
       </main>
+
+      {showsTaskActions && (
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className="fixed right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] rounded-full bg-teal-700 px-5 py-3 font-semibold text-white shadow-lg"
+        >
+          + İş ekle
+        </button>
+      )}
+
+      {openTask && (
+        <TaskDetail
+          key={openTask.id}
+          taskId={openTask.id}
+          currentUserId={user.id}
+          assignNow={openTask.assignNow}
+          onClose={() => setOpenTask(null)}
+          onChanged={refreshLists}
+        />
+      )}
+
+      {creating && (
+        <TaskForm
+          teams={teams ?? []}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            refreshLists();
+          }}
+        />
+      )}
     </div>
   );
 }
