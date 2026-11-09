@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Sekme çubuğunda kaydırma çubuğunu gizler; kaydırma dokunmatik ekranda çalışmaya devam eder. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
