@@ -88,9 +88,10 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 ## İş kuralları
 - Havuz = needs_assignee = true AND status <> 'done' AND deleted_at IS NULL AND aktif 'owner' ataması yok. Havuz ayrı tablo değil, bir sorgu/görünüm.
 - Üstlen: kişiye aktif 'owner' ataması oluşturur (source='claimed').
-- Ata: yetkili bir kullanıcı, başka bir aktif üyeye 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Atanan kişi işi İşlerim'de görür; "Bırak" diyerek işi geri verebilir.
+- Ata: aktif bir kullanıcı, başka bir aktif kullanıcıya 'owner' ataması oluşturur (source='assigned', assigned_by dolu). Mevcut sahibin ataması kapanır. Ekibe özel görevlerde hedef kişi o ekibin aktif üyesi olmalıdır. Atanan kişi işi İşlerim'de görür; "Bırak" diyerek işi geri verebilir.
+- Destek: aktif bir kullanıcı görevde 'support' kaydı oluşturabilir (source='claimed'). Üstlenince destek kaydı kapanır.
 - Bırak: ilgili atamanın ended_at alanını doldurur; needs_assignee hâlâ true ise iş kendiliğinden havuza döner.
-- Atamayı kimin yapabileceği ve atanan kişinin kabulünün gerekip gerekmediği açık karar (aşağıya bak); yetki kontrolünü tek bir yerde (policy fonksiyonu) topla.
+- Atama ve düzenleme yetkisi kararları aşağıdadır. Görünürlük kuralları tek modülde (server/src/policy/visibility.ts) toplanır; rotalar bu kuralları kendisi yeniden yazmaz.
 - Görevler sekmesi sıralaması: ORDER BY due_date ASC NULLS LAST, açık görevler.
 - Ekip sekmesi görünürlüğü: kullanıcının aktif team_members kaydından türetilir. Dernek sekmesi tüm giriş yapmış kullanıcılara açık.
 - Her görev değişikliği (durum, atama, üstlenme, bırakma, termin, kişi lazım bayrağı) task_history'ye yazılır; her harekette tasks.last_activity_at güncellenir.
@@ -103,7 +104,10 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
    - Ekip sekmesi: o ekibin tüm görevlerini (açık + ekibe özel) üyelere gösterir.
    - İşlerim: kullanıcıya atanmış görevler görünürlük ne olursa olsun görünür.
    - Görünürlük koşulu tek bir yerde (ortak SQL parçası/fonksiyon) tanımlanır.
-2. Atama yetkisi: Herkes herkese (aktif üyelere) atayabilir. Atanan kişinin onayı gerekmez; kişi isterse "Bırak" ile işi geri verir.
+2. Atama yetkisi: Herkes herkese (aktif üyelere) atayabilir. Atanan kişinin onayı gerekmez; kişi isterse "Bırak" ile işi geri verir. Ekibe özel görevlerde yalnızca o ekibin aktif üyeleri atanabilir; ekibe özel yapılan görevde ekip dışı atanmış kişi varsa değişiklik reddedilir (409).
+3. Düzenleme ve silme: Aktif her kullanıcı görevi düzenleyebilir ve yumuşak silebilir. Ekibe özel görevler yalnızca o ekibin üyelerine ve atanmış kişilere görünür.
+4. İlerleme sayıları (Projeler): Gizli ekibe özel görevler de sayılır (kullanıcı kararı; bilinen bilgi sızıntısı riski kabul edildi).
+5. Destek rolü Aşama 3'te dahildir: 'support' kaydı, üstlenme ve bırakma ile aynı kurallarla çalışır.
 
 ## Hâlâ açık
 1. Bir görev birden fazla kişi gerektirebilir mi? Şimdilik needs_assignee boolean.

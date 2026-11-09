@@ -14,7 +14,7 @@
     "migrate": "node-pg-migrate up -m migrations --envPath ../.env",
     "migrate:down": "node-pg-migrate down -m migrations --envPath ../.env",
     "seed": "tsx seed/seed.ts",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "keywords": [],
   "author": "",
