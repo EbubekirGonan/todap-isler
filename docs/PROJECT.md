@@ -68,7 +68,10 @@ teams(id, name, description, type ['term' | 'ongoing'], term_start, term_end, cr
 team_members(id, team_id, user_id, role_title, started_at, ended_at)
   - ended_at boşsa kişi hâlâ üye. Silme yok.
 
-projects(id, name, description, status, start_date, due_date, team_id NULL, created_by, created_at)
+projects(id, name, description, status, start_date, due_date, created_by, created_at)
+
+project_teams(id, project_id, team_id, started_at, ended_at NULL)
+  - Bir faaliyet birden fazla ekibe, bir ekip birden fazla faaliyete bağlanabilir. ended_at boşsa bağlantı açıktır.
 
 tasks(id, project_id NULL, team_id NULL, parent_task_id NULL, title, description,
       status ['planning' | 'in_progress' | 'nearly_done' | 'done'] default 'planning', due_date NULL, target_date NULL, completed_at NULL,
