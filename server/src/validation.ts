@@ -74,3 +74,10 @@ export function parseBoolean(value: unknown, field: string): boolean {
   }
   return value;
 }
+
+export function parseNonNegativeInteger(value: unknown, field: string, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > max) {
+    throw new HttpError(400, `${field} 0 ile ${max} arasında bir tam sayı olmalıdır.`);
+  }
+  return value;
+}

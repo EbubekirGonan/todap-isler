@@ -119,28 +119,28 @@ async function seedProjects(
 ) {
   const education = await insertRow(
     client,
-    "INSERT INTO projects (name, description, start_date, due_date, team_id, created_by) VALUES ($1, $2, current_date + $3::integer, current_date + $4::integer, $5, $6)",
+    "INSERT INTO projects (name, description, start_date, due_date, created_by) VALUES ($1, $2, current_date + $3::integer, current_date + $4::integer, $5)",
     [
       "Kasım eğitim programı",
       "Kasım ayındaki gönüllü eğitim oturumlarının hazırlığı",
       -10,
       20,
-      t.education,
       u.mehmet,
     ],
   );
+  await client.query("INSERT INTO project_teams (project_id, team_id) VALUES ($1, $2)", [education, t.education]);
   const general = await insertRow(
     client,
-    "INSERT INTO projects (name, description, start_date, due_date, team_id, created_by) VALUES ($1, $2, current_date + $3::integer, current_date + $4::integer, $5, $6)",
+    "INSERT INTO projects (name, description, start_date, due_date, created_by) VALUES ($1, $2, current_date + $3::integer, current_date + $4::integer, $5)",
     [
       "Yıllık genel kurul",
       "Yıllık genel kurul toplantısının organizasyonu",
       -30,
       60,
-      t.board,
       u.ayse,
     ],
   );
+  await client.query("INSERT INTO project_teams (project_id, team_id) VALUES ($1, $2)", [general, t.board]);
   return { education, general };
 }
 
@@ -382,7 +382,7 @@ async function main() {
   try {
     await client.query("BEGIN");
     await client.query(
-      "TRUNCATE sessions, login_tokens, task_history, task_comments, task_assignments, tasks, projects, team_members, teams, users RESTART IDENTITY CASCADE",
+      "TRUNCATE sessions, login_tokens, task_history, task_comments, task_assignments, tasks, project_teams, activity_log, projects, team_members, teams, users RESTART IDENTITY CASCADE",
     );
 
     const users = await seedUsers(client);

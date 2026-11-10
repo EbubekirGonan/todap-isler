@@ -1,4 +1,5 @@
 import express, { type ErrorRequestHandler } from "express";
+import { feedRouter } from "./activity/routes.js";
 import { authRouter } from "./auth/routes.js";
 import { query } from "./db.js";
 import { HttpError } from "./http-error.js";
@@ -41,6 +42,7 @@ export function createApp() {
   app.use("/api/projects", projectsRouter);
   app.use("/api/teams", teamsRouter);
   app.use("/api/users", usersRouter);
+  app.use("/api/feed", feedRouter);
 
   app.use(errorHandler);
 

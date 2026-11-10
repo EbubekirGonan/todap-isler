@@ -83,7 +83,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
       className="block w-full rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200"
     >
       <h3 className="font-semibold text-slate-900">{project.name}</h3>
-      {project.teamName && <p className="mt-1 text-xs text-slate-500">{project.teamName}</p>}
+      {project.teams.length > 0 && <p className="mt-1 text-xs text-slate-500">{project.teams.map((team) => team.name).join(', ')}</p>}
       <p className="mt-2 text-xs text-slate-600">
         {progress.done}/{progress.total} tamamlandı
         {progress.openCount > 0 && ` · ${progress.openCount} görevde kişi aranıyor`}

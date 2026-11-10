@@ -81,6 +81,87 @@ export async function getMyTeams(): Promise<Team[]> {
   return data.teams;
 }
 
+export type TeamMember = {
+  userId: string;
+  name: string;
+  roleTitle: string | null;
+  startedAt: string;
+};
+
+export type TeamProjectSummary = {
+  id: string;
+  name: string;
+  status: string;
+  dueDate: string | null;
+};
+
+// Takım listesi ve detayı: kontenjan bilgisi ve katılım durumu dahil.
+export type TeamSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 'term' | 'ongoing';
+  termStart: string | null;
+  termEnd: string | null;
+  requiredPeople: number;
+  activeCount: number;
+  openSlots: number;
+  isMember: boolean;
+  canJoin: boolean;
+};
+
+export type TeamDetail = TeamSummary & {
+  members: TeamMember[];
+  projects: TeamProjectSummary[];
+};
+
+export async function listTeams(): Promise<TeamSummary[]> {
+  const data = await request<{ teams: TeamSummary[] }>('/api/teams');
+  return data.teams;
+}
+
+export async function getTeam(teamId: string): Promise<TeamDetail> {
+  const data = await request<{ team: TeamDetail }>(`/api/teams/${teamId}`);
+  return data.team;
+}
+
+export function joinTeam(teamId: string): Promise<void> {
+  return request(`/api/teams/${teamId}/join`, { method: 'POST' });
+}
+
+export function leaveTeam(teamId: string): Promise<void> {
+  return request(`/api/teams/${teamId}/leave`, { method: 'POST' });
+}
+
+export async function updateTeamRequiredPeople(teamId: string, requiredPeople: number): Promise<TeamDetail> {
+  const data = await request<{ team: TeamDetail }>(`/api/teams/${teamId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ requiredPeople }),
+  });
+  return data.team;
+}
+
+// Akış kaydı: görev hareketleri (kind 'task'), faaliyet ve ekip hareketleri.
+export type FeedEntry = {
+  kind: 'task' | 'project' | 'team';
+  entityId: string;
+  entityName: string;
+  action: string | null;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  userId: string;
+  userName: string;
+  createdAt: string;
+};
+
+export async function listFeed(before?: string): Promise<FeedEntry[]> {
+  const params = new URLSearchParams({ limit: '50' });
+  if (before) params.set('before', before);
+  const data = await request<{ entries: FeedEntry[] }>(`/api/feed?${params.toString()}`);
+  return data.entries;
+}
+
 export type TaskStatus = 'planning' | 'in_progress' | 'nearly_done' | 'done';
 
 export type Assignment = {
@@ -238,8 +319,7 @@ export type Project = {
   status: string;
   startDate: string | null;
   dueDate: string | null;
-  teamId: string | null;
-  teamName: string | null;
+  teams: { id: string; name: string }[];
   progress: ProjectProgress;
 };
 
@@ -248,7 +328,7 @@ export type NewProject = {
   description: string | null;
   startDate: string | null;
   dueDate: string | null;
-  teamId: string | null;
+  teamIds: string[];
 };
 
 export async function listProjects(): Promise<Project[]> {

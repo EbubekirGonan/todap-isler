@@ -36,12 +36,15 @@ Kullanıcıların çoğu telefondan girecek. İlk sürüm mobil öncelikli bir w
 Herkes için:
 1. İşlerim: Bana üstlendiğim veya bana atanmış aktif işler. Gruplar: Geciken / Bu hafta / Sonra. Altta "İş ekle" butonu.
 2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri. Aktifken yalnızca kişinin üyesi olduğu ekiplerin ekibe özel görevleri görünür; pasifken ekibe özel görevler hiç görünmez.
-3. Faaliyetler (veri modelindeki projects tablosu): Büyük çaplı işler. Kartta: ad, ekip, ilerleme çubuğu ve yüzde, "N görevde kişi aranıyor". Karta dokununca faaliyetin görevleri listelenir. "Faaliyet ekle" butonu: ad zorunlu; açıklama, ekip, başlangıç ve bitiş tarihi isteğe bağlı. Faaliyet oluşturmak herkese açıktır.
+3. Faaliyetler (veri modelindeki projects tablosu): Büyük çaplı işler. Bir faaliyet birden fazla takıma bağlanabilir (project_teams, bağlantılar ended_at ile kapanır). Kartta: ad, takımlar, ilerleme çubuğu ve yüzde, "N görevde kişi aranıyor". Karta dokununca faaliyetin görevleri listelenir. "Faaliyet ekle" butonu: ad zorunlu; açıklama, ekip, başlangıç ve bitiş tarihi isteğe bağlı. Faaliyet oluşturmak herkese açıktır.
 4. Tüm İşler: Sahibi kim olursa olsun tüm görevler tek liste (ekibe özel olanlar dahil; başlık ve durum herkese görünür). Varsayılan olarak yalnızca açık işler gösterilir; "Açık" çipi kapatılınca tamamlananlar da listelenir. Sıralama termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Başka filtre çipi yoktur.
 5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
 
+6. Takımlar: Tüm takımların listesi. Her takımda kadro durumu ("x/y kişi · n açık yer" veya "Kadro dolu") ve o takımın üstlendiği faaliyetler görünür. Bir kişi bir takıma aynı anda bir kez girer; ayrıldıktan sonra tekrar katılabilir. Katılım yalnızca açık yer varsa mümkündür (gerekli kişi sayısı − aktif üye sayısı > 0). Gerekli kişi sayısı sonradan düzenlenebilir.
+7. Akış: Uygulamada yapılan hareketlerin günlüğü (herkese açık). Kim ne yaptı, neyi ekledi, değiştirdi, kimi ekipten çıkardı gibi kayıtlar en yeniden eskiye listelenir; "Daha fazla" ile eski kayıtlar açılır. Ekibe özel görevlerin başlığı yalnızca o ekibin aktif üyelerine gösterilir.
+
 Sadece üyelere (şimdilik):
-6. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
+8. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
 
 Diğer ekranlar:
 - Kart: son tarih ("Son tarih: gg.aa.yyyy") varsa görünür; katkı sayısı "sahiplenen/tahmin" biçimindedir. Ara hedef tarihi şimdilik ekranlarda gösterilmez.

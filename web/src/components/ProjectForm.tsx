@@ -11,7 +11,7 @@ type Props = {
 export function ProjectForm({ teams, onCreated, onClose }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [teamId, setTeamId] = useState('');
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,7 +35,7 @@ export function ProjectForm({ teams, onCreated, onClose }: Props) {
       await createProject({
         name: trimmedName,
         description: description.trim() || null,
-        teamId: teamId || null,
+        teamIds,
         startDate: startDate || null,
         dueDate: dueDate || null,
       });
@@ -75,21 +75,24 @@ export function ProjectForm({ teams, onCreated, onClose }: Props) {
         </label>
 
         {teams.length > 0 && (
-          <label className="block text-sm font-medium text-slate-800">
-            Ekip (isteğe bağlı)
-            <select
-              value={teamId}
-              onChange={(event) => setTeamId(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
-            >
-              <option value="">Ekip yok</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-800">Ekipler (isteğe bağlı)</legend>
+            {teams.map((team) => (
+              <label key={team.id} className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={teamIds.includes(team.id)}
+                  onChange={(event) =>
+                    setTeamIds((current) =>
+                      event.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id),
+                    )
+                  }
+                  className="h-4 w-4 rounded border-slate-300 text-teal-700"
+                />
+                {team.name}
+              </label>
+            ))}
+          </fieldset>
         )}
 
         <div className="grid grid-cols-2 gap-3">

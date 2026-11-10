@@ -38,6 +38,11 @@ export async function activeTeamIds(userId: string): Promise<Set<string>> {
   return new Set(result.rows.map((row) => row.team_id));
 }
 
+// Akış herkese açıktır; ancak ekibe özel görevlerin adı yalnızca o ekibin aktif üyelerine gösterilir.
+export function feedTaskVisibleSql(userParam: string, alias = "t"): string {
+  return `(${alias}.team_only = false OR ${alias}.team_id IN (${activeTeamIdsSql(userParam)}))`;
+}
+
 // Katılım kuralı: ekibe özel görevlere yalnızca o ekibin aktif üyeleri katkı sağlayabilir ya da destek olabilir.
 export function canJoinTask(task: { team_only: boolean; team_id: string | null }, teamIds: Set<string>): boolean {
   return !task.team_only || (task.team_id !== null && teamIds.has(task.team_id));

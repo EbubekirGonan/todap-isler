@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getMyTeams, logout, type CurrentUser, type Team } from '../api';
 import { AllTasksScreen } from './AllTasksScreen';
+import { FeedScreen } from './FeedScreen';
 import { MyTasksScreen } from './MyTasksScreen';
 import { PoolScreen } from './PoolScreen';
 import { ProjectsScreen } from './ProjectsScreen';
 import { TabBar, type TabItem } from './TabBar';
 import { TaskDetail } from './TaskDetail';
 import { TaskForm } from './TaskForm';
+import { TeamsScreen } from './TeamsScreen';
 
 
 type Props = {
@@ -19,10 +21,10 @@ const FIXED_TABS: TabItem[] = [
   { key: 'pool', label: 'Havuz' },
   { key: 'projects', label: 'Faaliyetler' },
   { key: 'tasks', label: 'Tüm İşler' },
+  { key: 'teams', label: 'Takımlar' },
+  { key: 'feed', label: 'Akış' },
   { key: 'association', label: 'Dernek' },
 ];
-
-const FIXED_TAB_TITLES: Record<string, string> = Object.fromEntries(FIXED_TABS.map((tab) => [tab.key, tab.label]));
 
 export function AppShell({ user, onSignedOut }: Props) {
   const [teams, setTeams] = useState<Team[] | null>(null);
@@ -32,28 +34,28 @@ export function AppShell({ user, onSignedOut }: Props) {
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Ekip sekmeleri üyeliğe göre oluştuğu için katılma ve ayrılmada yeniden okunur.
+  const loadTeams = useCallback(() => {
     getMyTeams()
       .then((list) => {
-        if (!cancelled) setTeams(list);
+        setTeams(list);
+        setTeamsError(null);
       })
-      .catch(() => {
-        if (!cancelled) setTeamsError('Ekipler yüklenemedi.');
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setTeamsError('Ekipler yüklenemedi.'));
   }, []);
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
 
   const teamTabs: TabItem[] = (teams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
   const tabs = [...FIXED_TABS, ...teamTabs];
   const activeTeam = teams?.find((team) => `team:${team.id}` === activeKey) ?? null;
   const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
-  const showsProjectScreens = activeKey === 'projects' || activeKey === 'tasks';
 
   function refreshLists() {
     setReloadKey((value) => value + 1);
+    loadTeams();
   }
 
   async function handleLogout() {
@@ -105,16 +107,17 @@ export function AppShell({ user, onSignedOut }: Props) {
         {activeKey === 'tasks' && (
           <AllTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
-        {!showsTaskActions && !showsProjectScreens && activeTeam && (
+        {activeKey === 'teams' && <TeamsScreen reloadKey={reloadKey} onChanged={refreshLists} />}
+        {activeKey === 'feed' && (
+          <FeedScreen key={reloadKey} reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
+        )}
+        {activeKey === 'association' && (
+          <TabPlaceholder title="Dernek" text="Bu ekranın içeriği sonraki aşamalarda eklenecek." />
+        )}
+        {activeTeam && (
           <TabPlaceholder
             title={activeTeam.name}
             text={activeTeam.role_title ? `Rolünüz: ${activeTeam.role_title}` : 'Ekip içeriği sonraki aşamalarda eklenecek.'}
-          />
-        )}
-        {!showsTaskActions && !showsProjectScreens && !activeTeam && (
-          <TabPlaceholder
-            title={FIXED_TAB_TITLES[activeKey] ?? 'Todap'}
-            text="Bu ekranın içeriği sonraki aşamalarda eklenecek."
           />
         )}
       </main>

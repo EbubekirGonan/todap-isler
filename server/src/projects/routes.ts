@@ -1,9 +1,17 @@
+import type pg from "pg";
 import { Router } from "express";
 import { requireAuth } from "../auth/session.js";
-import { query } from "../db.js";
+import { query, withTransaction } from "../db.js";
 import { HttpError } from "../http-error.js";
+import { recordActivity } from "../activity/service.js";
 import { listTasks } from "../tasks/service.js";
-import { asObject, parseId, parseOptionalDate, parseOptionalId, parseOptionalText, parseRequiredText } from "../validation.js";
+import {
+  asObject,
+  parseId,
+  parseOptionalDate,
+  parseOptionalText,
+  parseRequiredText,
+} from "../validation.js";
 
 export const projectsRouter = Router();
 
@@ -11,7 +19,13 @@ projectsRouter.use(requireAuth);
 
 // İlerleme sayıları gizli ekibe özel görevleri de içerir (kullanıcı kararı); bu yüzden görünürlük filtresi uygulanmaz.
 const PROJECT_SELECT = `
-  SELECT p.id, p.name, p.description, p.status, p.start_date, p.due_date, p.team_id, tm.name AS team_name,
+  SELECT p.id, p.name, p.description, p.status, p.start_date, p.due_date,
+         COALESCE((
+           SELECT json_agg(json_build_object('id', tm.id::text, 'name', tm.name) ORDER BY tm.name)
+             FROM project_teams pt
+             JOIN teams tm ON tm.id = pt.team_id
+            WHERE pt.project_id = p.id AND pt.ended_at IS NULL
+         ), '[]'::json) AS teams,
          COUNT(t.id) FILTER (WHERE t.id IS NOT NULL) AS total_count,
          COUNT(t.id) FILTER (WHERE t.status = 'done') AS done_count,
          COUNT(t.id) FILTER (
@@ -22,10 +36,9 @@ const PROJECT_SELECT = `
              )
          ) AS open_count
     FROM projects p
-    LEFT JOIN teams tm ON tm.id = p.team_id
     LEFT JOIN tasks t ON t.project_id = p.id AND t.deleted_at IS NULL`;
 
-const PROJECT_GROUP = "GROUP BY p.id, tm.name";
+const PROJECT_GROUP = "GROUP BY p.id";
 
 type ProjectRow = {
   id: string;
@@ -34,8 +47,7 @@ type ProjectRow = {
   status: string;
   start_date: string | null;
   due_date: string | null;
-  team_id: string | null;
-  team_name: string | null;
+  teams: { id: string; name: string }[];
   total_count: string;
   done_count: string;
   open_count: string;
@@ -51,8 +63,7 @@ function toProjectDto(row: ProjectRow) {
     status: row.status,
     startDate: row.start_date,
     dueDate: row.due_date,
-    teamId: row.team_id,
-    teamName: row.team_name,
+    teams: row.teams,
     progress: {
       total,
       done,
@@ -90,28 +101,120 @@ projectsRouter.get("/:id/tasks", async (req, res) => {
   res.json({ tasks });
 });
 
+function parseTeamIds(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new HttpError(400, "Ekipler liste olmalıdır.");
+  }
+  return [...new Set(value.map((item) => parseId(item, "Geçersiz ekip.")))];
+}
+
+async function assertTeamsExist(client: pg.PoolClient, teamIds: string[]): Promise<void> {
+  if (teamIds.length === 0) {
+    return;
+  }
+  const result = await client.query("SELECT id FROM teams WHERE id = ANY($1::bigint[])", [teamIds]);
+  if (result.rowCount !== teamIds.length) {
+    throw new HttpError(400, "Ekip bulunamadı.");
+  }
+}
+
 projectsRouter.post("/", async (req, res) => {
   const body = asObject(req.body);
-  const teamId = parseOptionalId(body.teamId, "Geçersiz ekip.");
-  if (teamId) {
-    const team = await query("SELECT 1 FROM teams WHERE id = $1", [teamId]);
+  const name = parseRequiredText(body.name, "Proje adı", 200);
+  const description = parseOptionalText(body.description, "Açıklama", 5000);
+  const startDate = parseOptionalDate(body.startDate, "Başlangıç tarihi");
+  const dueDate = parseOptionalDate(body.dueDate, "Bitiş tarihi");
+  const teamIds = parseTeamIds(body.teamIds);
+
+  const id = await withTransaction(async (client) => {
+    await assertTeamsExist(client, teamIds);
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO projects (name, description, start_date, due_date, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [name, description, startDate, dueDate, req.user!.id],
+    );
+    const projectId = result.rows[0].id;
+    for (const teamId of teamIds) {
+      await client.query("INSERT INTO project_teams (project_id, team_id) VALUES ($1, $2)", [projectId, teamId]);
+    }
+    await recordActivity(client, {
+      userId: req.user!.id,
+      action: "created",
+      entityType: "project",
+      entityId: projectId,
+      entityName: name,
+    });
+    return projectId;
+  });
+  res.status(201).json({ id });
+});
+
+// Faaliyeti ekibe bağlar. Aynı ekip aynı anda bir kez bağlı olabilir; bağlantı kaldırıldıktan sonra yeniden kurulabilir.
+projectsRouter.post("/:id/teams", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz proje kimliği.");
+  const teamId = parseId(asObject(req.body).teamId, "Geçersiz ekip.");
+
+  await withTransaction(async (client) => {
+    const project = await client.query<{ name: string }>("SELECT name FROM projects WHERE id = $1", [id]);
+    if (!project.rowCount) {
+      throw new HttpError(404, "Proje bulunamadı.");
+    }
+    const team = await client.query<{ name: string }>("SELECT name FROM teams WHERE id = $1", [teamId]);
     if (!team.rowCount) {
       throw new HttpError(400, "Ekip bulunamadı.");
     }
-  }
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO projects (name, description, start_date, due_date, team_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [
-      parseRequiredText(body.name, "Proje adı", 200),
-      parseOptionalText(body.description, "Açıklama", 5000),
-      parseOptionalDate(body.startDate, "Başlangıç tarihi"),
-      parseOptionalDate(body.dueDate, "Bitiş tarihi"),
-      teamId,
-      req.user!.id,
-    ],
-  );
-  res.status(201).json({ id: result.rows[0].id });
+    const existing = await client.query(
+      "SELECT 1 FROM project_teams WHERE project_id = $1 AND team_id = $2 AND ended_at IS NULL",
+      [id, teamId],
+    );
+    if (existing.rowCount) {
+      throw new HttpError(409, "Bu faaliyet bu ekibe zaten bağlı.");
+    }
+
+    await client.query("INSERT INTO project_teams (project_id, team_id) VALUES ($1, $2)", [id, teamId]);
+    await recordActivity(client, {
+      userId: req.user!.id,
+      action: "linked_team",
+      entityType: "project",
+      entityId: id,
+      entityName: project.rows[0].name,
+      newValue: team.rows[0].name,
+    });
+  });
+  res.status(204).end();
 });
+
+projectsRouter.delete("/:id/teams/:teamId", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz proje kimliği.");
+  const teamId = parseId(req.params.teamId, "Geçersiz ekip.");
+
+  await withTransaction(async (client) => {
+    const project = await client.query<{ name: string }>("SELECT name FROM projects WHERE id = $1", [id]);
+    if (!project.rowCount) {
+      throw new HttpError(404, "Proje bulunamadı.");
+    }
+    const team = await client.query<{ name: string }>("SELECT name FROM teams WHERE id = $1", [teamId]);
+    const closed = await client.query(
+      "UPDATE project_teams SET ended_at = now() WHERE project_id = $1 AND team_id = $2 AND ended_at IS NULL",
+      [id, teamId],
+    );
+    if (!closed.rowCount) {
+      throw new HttpError(404, "Bu faaliyet bu ekibe bağlı değil.");
+    }
+    await recordActivity(client, {
+      userId: req.user!.id,
+      action: "unlinked_team",
+      entityType: "project",
+      entityId: id,
+      entityName: project.rows[0].name,
+      oldValue: team.rows[0]?.name ?? null,
+    });
+  });
+  res.status(204).end();
+});
+

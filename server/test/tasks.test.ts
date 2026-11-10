@@ -36,7 +36,7 @@ before(async () => {
     stdio: "inherit",
   });
   await query(
-    "TRUNCATE task_history, task_comments, task_assignments, tasks, projects, team_members, teams, sessions, login_tokens, users RESTART IDENTITY CASCADE",
+    "TRUNCATE task_history, task_comments, task_assignments, tasks, project_teams, activity_log, projects, team_members, teams, sessions, login_tokens, users RESTART IDENTITY CASCADE",
   );
 
   server = await new Promise<Server>((resolve) => {
@@ -457,5 +457,129 @@ describe("projeler ilerleme sayıları", () => {
   test("bilinmeyen faaliyet için görev listesi 404 döner", async () => {
     const alice = await createUser("Hasan");
     assert.equal((await api("GET", "/api/projects/999999/tasks", alice)).status, 404);
+  });
+});
+
+describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
+  async function setRequired(teamId: string, count: number): Promise<void> {
+    await query("UPDATE teams SET required_people = $2 WHERE id = $1", [teamId, count]);
+  }
+
+  test("katılım gerekli kişi sayısına göre açılır ve kapanır; ayrılan kişi yeniden girebilir", async () => {
+    const ali = await createUser("Ali");
+    const veli = await createUser("Veli");
+    const team = await createTeam("Katılım Ekibi");
+    await setRequired(team, 1);
+
+    assert.equal((await api("POST", `/api/teams/${team}/join`, ali)).status, 204);
+    assert.equal((await api("POST", `/api/teams/${team}/join`, veli)).status, 409);
+    assert.equal((await api("POST", `/api/teams/${team}/join`, ali)).status, 409);
+
+    assert.equal((await api("POST", `/api/teams/${team}/leave`, ali)).status, 204);
+    assert.equal((await api("POST", `/api/teams/${team}/leave`, ali)).status, 409);
+    assert.equal((await api("POST", `/api/teams/${team}/join`, ali)).status, 204);
+  });
+
+  test("ekip listesi açık kontenjanı ve katılım durumunu gösterir", async () => {
+    const ayse = await createUser("Ayşe");
+    const team = await createTeam("Liste Ekibi");
+    await setRequired(team, 2);
+
+    const before = await api("GET", "/api/teams", ayse);
+    const listBefore = ((await before.json()) as { teams: { id: string; openSlots: number; canJoin: boolean }[] }).teams;
+    const itemBefore = listBefore.find((t) => t.id === team)!;
+    assert.equal(itemBefore.openSlots, 2);
+    assert.equal(itemBefore.canJoin, true);
+
+    await api("POST", `/api/teams/${team}/join`, ayse);
+    const after = await api("GET", "/api/teams", ayse);
+    const itemAfter = ((await after.json()) as { teams: { id: string; openSlots: number; canJoin: boolean; isMember: boolean }[] }).teams.find((t) => t.id === team)!;
+    assert.equal(itemAfter.openSlots, 1);
+    assert.equal(itemAfter.isMember, true);
+    assert.equal(itemAfter.canJoin, false);
+  });
+
+  test("ekibe özel faaliyeti üstlenmiş kişi ekipten ayrılamaz; bırakınca ayrılabilir", async () => {
+    const selin = await createUser("Selin");
+    const emre = await createUser("Emre");
+    const team = await createTeam("Kilit Ekibi");
+    await setRequired(team, 3);
+    await api("POST", `/api/teams/${team}/join`, selin);
+    await api("POST", `/api/teams/${team}/join`, emre);
+
+    const taskId = await createTask(selin, { teamId: team, teamOnly: true });
+    assert.equal((await api("POST", `/api/tasks/${taskId}/assign`, selin, { userId: emre })).status, 200);
+
+    assert.equal((await api("POST", `/api/teams/${team}/leave`, emre)).status, 409);
+    assert.equal((await api("POST", `/api/tasks/${taskId}/release`, emre)).status, 200);
+    assert.equal((await api("POST", `/api/teams/${team}/leave`, emre)).status, 204);
+  });
+
+  test("gerekli kişi sayısını herhangi bir aktif kullanıcı değiştirir ve akışa düşer", async () => {
+    const okan = await createUser("Okan");
+    const team = await createTeam("Sayı Ekibi");
+    const res = await api("PATCH", `/api/teams/${team}`, okan, { requiredPeople: 4 });
+    assert.equal(res.status, 200);
+    assert.equal(((await res.json()) as { team: { requiredPeople: number } }).team.requiredPeople, 4);
+
+    const feed = ((await (await api("GET", "/api/feed", okan)).json()) as { entries: { kind: string; action: string | null; entityName: string; field: string | null }[] }).entries;
+    assert.ok(feed.some((e) => e.kind === "team" && e.entityName === "Sayı Ekibi" && e.field === "required_people"));
+  });
+
+  test("faaliyet birden fazla ekibe bağlanır, bağlantı kaldırılıp yeniden kurulabilir", async () => {
+    const gizem = await createUser("Gizem");
+    const ekip1 = await createTeam("Bağlantı Bir");
+    const ekip2 = await createTeam("Bağlantı İki");
+
+    const created = await api("POST", "/api/projects", gizem, { name: "Ortak Faaliyet", teamIds: [ekip1, ekip2] });
+    assert.equal(created.status, 201);
+    const projectId = ((await created.json()) as { id: string }).id;
+
+    const detail = ((await (await api("GET", `/api/projects/${projectId}`, gizem)).json()) as { project: { teams: { id: string }[] } }).project;
+    assert.deepEqual(detail.teams.map((t) => t.id).sort(), [ekip1, ekip2].sort());
+
+    assert.equal((await api("POST", `/api/projects/${projectId}/teams`, gizem, { teamId: ekip1 })).status, 409);
+    assert.equal((await api("DELETE", `/api/projects/${projectId}/teams/${ekip1}`, gizem)).status, 204);
+    assert.equal((await api("DELETE", `/api/projects/${projectId}/teams/${ekip1}`, gizem)).status, 404);
+    assert.equal((await api("POST", `/api/projects/${projectId}/teams`, gizem, { teamId: ekip1 })).status, 204);
+
+    const relinked = ((await (await api("GET", `/api/projects/${projectId}`, gizem)).json()) as { project: { teams: { id: string }[] } }).project;
+    assert.equal(relinked.teams.length, 2);
+  });
+
+  test("akış ekibe özel görev başlığını yalnızca üyelere gösterir ve sayfalanır", async () => {
+    const hale = await createUser("Hale");
+    const ferhat = await createUser("Ferhat");
+    const outsider = await createUser("Kerem");
+    const team = await createTeam("Akış Ekibi");
+    await setRequired(team, 2);
+    await api("POST", `/api/teams/${team}/join`, hale);
+
+    const secretTitle = "Gizli ekip görevi";
+    await createTask(hale, { title: secretTitle, teamId: team, teamOnly: true });
+
+    const memberFeed = ((await (await api("GET", "/api/feed?limit=100", hale)).json()) as { entries: { entityName: string }[] }).entries;
+    assert.ok(memberFeed.some((e) => e.entityName === secretTitle));
+
+    const outsiderFeed = ((await (await api("GET", "/api/feed?limit=100", outsider)).json()) as { entries: { entityName: string }[] }).entries;
+    assert.ok(!outsiderFeed.some((e) => e.entityName === secretTitle));
+
+    type FeedItem = { createdAt: string };
+    const feedOf = async (path: string) => ((await (await api("GET", path, ferhat)).json()) as { entries: FeedItem[] }).entries;
+    const all = await feedOf("/api/feed?limit=100");
+    const page1 = await feedOf("/api/feed?limit=2");
+    assert.equal(page1.length, 2);
+
+    const cursor = page1[1].createdAt;
+    const next = await feedOf(`/api/feed?limit=100&before=${encodeURIComponent(cursor)}`);
+    assert.ok(next.every((e) => e.createdAt <= cursor));
+    assert.equal(next.length, all.filter((e) => e.createdAt <= cursor).length);
+  });
+
+  test("bilinmeyen ekip ve geçersiz sayı doğru hata döner", async () => {
+    const yusuf = await createUser("Yusuf");
+    assert.equal((await api("GET", "/api/teams/999999", yusuf)).status, 404);
+    assert.equal((await api("PATCH", `/api/teams/${await createTeam("Hata Ekibi")}`, yusuf, { requiredPeople: -1 })).status, 400);
+    assert.equal((await api("GET", "/api/feed?limit=0", yusuf)).status, 400);
   });
 });
