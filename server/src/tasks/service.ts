@@ -141,7 +141,7 @@ export async function listTasks(userId: string, filters: TaskFilters) {
       `EXISTS (SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.user_id = ${bind(userId)} AND a.ended_at IS NULL)`,
     );
   }
-  if (filters.view === "pool") {
+  if (filters.view === "pool" && filters.scope !== "mine-team") {
     conditions.push(poolSql());
   }
   if (filters.view === "pool" || filters.seeking) {

@@ -84,9 +84,6 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
     >
       <h3 className="font-semibold text-slate-900">{project.name}</h3>
       {project.teamName && <p className="mt-1 text-xs text-slate-500">{project.teamName}</p>}
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
-        <div className="h-full bg-teal-600" style={{ width: `${progress.percent}%` }} />
-      </div>
       <p className="mt-2 text-xs text-slate-600">
         {progress.done}/{progress.total} tamamlandı
         {progress.openCount > 0 && ` · ${progress.openCount} görevde kişi aranıyor`}
@@ -124,9 +121,6 @@ function ProjectDetail({
         <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">{project.name}</h2>
           {project.description && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{project.description}</p>}
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
-            <div className="h-full bg-teal-600" style={{ width: `${project.progress.percent}%` }} />
-          </div>
           <p className="mt-2 text-xs text-slate-600">
             {project.progress.done}/{project.progress.total} tamamlandı
             {project.progress.openCount > 0 && ` · ${project.progress.openCount} görevde kişi aranıyor`}

@@ -34,7 +34,7 @@ export function PoolScreen({ reloadKey, onOpenTask, onChanged }: Props) {
           aria-pressed={personal}
           onClick={() => setPersonal((value) => !value)}
           className={`rounded-full px-3 py-1 text-sm font-medium ${
-            personal ? 'bg-violet-700 text-white' : 'bg-slate-200 text-slate-600'
+            personal ? 'bg-teal-100 text-teal-800' : 'bg-slate-200 text-slate-600'
           }`}
         >
           Bana özel

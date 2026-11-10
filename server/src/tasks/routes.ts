@@ -66,7 +66,8 @@ function parseFlag(value: unknown): boolean {
 }
 
 function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskFilters {
-  const scope = query.scope ?? "all";
+  // Havuz varsayılan olarak yalnızca herkese açık görevleri gösterir.
+  const scope = query.scope ?? (view === "pool" ? "public" : "all");
   if (typeof scope !== "string" || !SCOPES.includes(scope as TaskScope)) {
     throw new HttpError(400, "Geçersiz kapsam.");
   }

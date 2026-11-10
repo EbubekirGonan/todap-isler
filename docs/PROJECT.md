@@ -35,9 +35,9 @@ Kullanıcıların çoğu telefondan girecek. İlk sürüm mobil öncelikli bir w
 
 Herkes için:
 1. İşlerim: Bana üstlendiğim veya bana atanmış aktif işler. Gruplar: Geciken / Bu hafta / Sonra. Altta "İş ekle" butonu.
-2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri.
+2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri. Aktifken yalnızca kişinin üyesi olduğu ekiplerin ekibe özel görevleri görünür; pasifken ekibe özel görevler hiç görünmez.
 3. Faaliyetler (veri modelindeki projects tablosu): Büyük çaplı işler. Kartta: ad, ekip, ilerleme çubuğu ve yüzde, "N görevde kişi aranıyor". Karta dokununca faaliyetin görevleri listelenir. "Faaliyet ekle" butonu: ad zorunlu; açıklama, ekip, başlangıç ve bitiş tarihi isteğe bağlı. Faaliyet oluşturmak herkese açıktır.
-4. Tüm İşler: Sahibi kim olursa olsun tüm görevler tek liste (ekibe özel olanlar dahil; başlık ve durum herkese görünür). Yalnızca açık işler gösterilir, termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Filtre çipi yoktur.
+4. Tüm İşler: Sahibi kim olursa olsun tüm görevler tek liste (ekibe özel olanlar dahil; başlık ve durum herkese görünür). Varsayılan olarak yalnızca açık işler gösterilir; "Açık" çipi kapatılınca tamamlananlar da listelenir. Sıralama termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. Başka filtre çipi yoktur.
 5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
 
 Sadece üyelere (şimdilik):
@@ -104,7 +104,7 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 ## Kararlar
 1. Görünürlük: Görev eklerken "Ekibe özel" onay kutusu vardır (ekip seçiliyse aktif). İşaretliyse görev yalnızca o ekibin aktif üyelerine görünür (tasks.team_only = true, team_id zorunlu: CHECK (NOT team_only OR team_id IS NOT NULL)).
    - Ekibe özel bir görevin başlığı, durumu ve detayı herkese görünür (Tüm İşler, Faaliyetler, detay). Yalnızca o ekibin aktif üyeleri katkı sağlayabilir ya da destek olabilir; üye olmayanlarda "Katkı sağlarım" ve "Destek atabilirim" butonları gizlenir (sunucuda da 409 döner).
-   - Havuz yalnızca herkese açık görevleri gösterir (team_only = false). Ekibe özel görevler Havuz'da görünmez.
+   - Havuz varsayılan olarak yalnızca herkese açık görevleri gösterir (team_only = false). Ekibe özel görevler yalnızca "Bana özel" filtresi açıkken ve yalnızca kişinin aktif üyesi olduğu ekiplerin görevleri olarak görünür (scope=mine-team).
    - "Bana özel" filtresi: kullanıcının aktif üyesi olduğu ekiplerin ekibe özel görevlerini gösterir.
    - Ekip sekmesi: o ekibin tüm görevlerini (açık + ekibe özel) üyelere gösterir.
    - İşlerim: kullanıcıya atanmış görevler görünürlük ne olursa olsun görünür.

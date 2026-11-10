@@ -136,6 +136,18 @@ describe("görünürlük kuralları", () => {
     assert.ok(!(await listIds(bob, "/api/tasks/pool")).includes(taskId));
   });
 
+  test("havuzda bana özel kapsamı yalnızca üyesi olunan ekiplerin ekibe özel görevlerini getirir", async () => {
+    const publicId = await createTask(alice, {});
+    const teamOnlyId = await createTask(alice, { teamId: teamA, teamOnly: true });
+
+    const bobIds = await listIds(bob, "/api/tasks/pool?scope=mine-team");
+    assert.ok(bobIds.includes(teamOnlyId));
+    assert.ok(!bobIds.includes(publicId));
+
+    const carolIds = await listIds(carol, "/api/tasks/pool?scope=mine-team");
+    assert.ok(!carolIds.includes(teamOnlyId));
+  });
+
   test("üye olmayan katkı sağlayamaz ya da destek olamaz (409)", async () => {
     const taskId = await createTask(alice, { teamId: teamA, teamOnly: true });
     assert.equal((await api("POST", `/api/tasks/${taskId}/claim`, carol)).status, 409);
