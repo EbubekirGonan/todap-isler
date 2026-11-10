@@ -294,12 +294,16 @@ export type TaskListFilters = {
   scope: TaskListScope;
   includeDone: boolean;
   seeking: boolean;
+  sort?: 'due' | 'changed';
+  overdue?: boolean;
 };
 
 export async function listAllTasks(filters: TaskListFilters): Promise<Task[]> {
   const params = new URLSearchParams({ scope: filters.scope });
   if (filters.includeDone) params.set('includeDone', 'true');
   if (filters.seeking) params.set('seeking', 'true');
+  if (filters.sort === 'changed') params.set('sort', 'changed');
+  if (filters.overdue) params.set('overdue', 'true');
   const data = await request<{ tasks: Task[] }>(`/api/tasks?${params.toString()}`);
   return data.tasks;
 }

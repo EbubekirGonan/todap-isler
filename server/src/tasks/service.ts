@@ -38,6 +38,10 @@ export type TaskFilters = {
   includeDone?: boolean;
   // Yalnızca tahmini kişi sayısına ulaşılmamış görevler (kişi aranıyor).
   seeking?: boolean;
+  // Varsayılan termin sıralaması; "changed" son değişiklik tarihine göre en yeni önce sıralar.
+  sort?: "due" | "changed";
+  // Yalnızca tamamlanmamış ve termin tarihi bugünden (Europe/Istanbul) önce olan görevler.
+  overdue?: boolean;
 };
 
 type AssignmentRow = { userId: string; name: string; role: string; source: string };
@@ -157,12 +161,20 @@ export async function listTasks(userId: string, filters: TaskFilters) {
     conditions.push(`t.project_id = ${bind(filters.projectId)}`);
   }
 
+  if (filters.overdue) {
+    conditions.push("t.status <> 'done' AND t.due_date < (now() AT TIME ZONE 'Europe/Istanbul')::date");
+  }
+
   const teamIds = await activeTeamIds(userId);
-  // En gecikmişten başlayan sıralama: en erken son tarih önce, tarihsizler sonda.
+  const order =
+    filters.sort === "changed"
+      ? "t.last_activity_at DESC, t.id DESC"
+      : // En gecikmişten başlayan sıralama: en erken son tarih önce, tarihsizler sonda.
+        "t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC";
   const result = await query<TaskRow>(
     `${TASK_SELECT}
       WHERE ${conditions.join(" AND ")}
-      ORDER BY t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC`,
+      ORDER BY ${order}`,
     params,
   );
   return result.rows.map((row) => toTaskDto(row, teamIds));

@@ -65,6 +65,14 @@ function parseFlag(value: unknown): boolean {
   return value === "true" || value === "1";
 }
 
+function parseSort(value: unknown): "due" | "changed" {
+  if (value === undefined) return "due";
+  if (value !== "due" && value !== "changed") {
+    throw new HttpError(400, "Geçersiz sıralama.");
+  }
+  return value;
+}
+
 function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskFilters {
   // Havuz varsayılan olarak yalnızca herkese açık görevleri gösterir.
   const scope = query.scope ?? (view === "pool" ? "public" : "all");
@@ -77,6 +85,8 @@ function parseFilters(view: TaskFilters["view"], query: Request["query"]): TaskF
     scope: scope as TaskScope,
     includeDone: parseFlag(query.includeDone),
     seeking: parseFlag(query.seeking),
+    sort: parseSort(query.sort),
+    overdue: parseFlag(query.overdue),
   };
   if (query.status !== undefined) {
     filters.status = parseStatus(query.status);

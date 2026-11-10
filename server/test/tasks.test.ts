@@ -415,6 +415,32 @@ describe("düzenleme, yorum ve silme", () => {
     assert.ok(ids.indexOf(early) < ids.indexOf(late));
     assert.ok(ids.indexOf(late) < ids.indexOf(none));
   });
+
+  test("son değişiklik sıralaması en yeni değişen görevi öne alır", async () => {
+    const first = await createTask(alice, { dueDate: "2026-01-01" });
+    const second = await createTask(alice, { dueDate: "2026-01-05" });
+    await api("PATCH", `/api/tasks/${first}`, alice, { title: "Güncel başlık" });
+
+    const ids = await listIds(alice, "/api/tasks?sort=changed");
+    assert.ok(ids.indexOf(first) < ids.indexOf(second));
+  });
+
+  test("gecikti filtresi yalnızca tamamlanmamış ve tarihi geçmiş görevleri getirir", async () => {
+    const overdue = await createTask(alice, { dueDate: "2020-01-01" });
+    const future = await createTask(alice, { dueDate: "2999-01-01" });
+    const finishedLate = await createTask(alice, { dueDate: "2020-01-02" });
+    await api("PATCH", `/api/tasks/${finishedLate}`, alice, { status: "done" });
+
+    const ids = await listIds(alice, "/api/tasks?overdue=true&includeDone=true");
+    assert.ok(ids.includes(overdue));
+    assert.ok(!ids.includes(future));
+    assert.ok(!ids.includes(finishedLate));
+  });
+
+  test("geçersiz sıralama 400 döner", async () => {
+    const res = await api("GET", "/api/tasks?sort=rastgele", alice);
+    assert.equal(res.status, 400);
+  });
 });
 
 describe("projeler ilerleme sayıları", () => {
