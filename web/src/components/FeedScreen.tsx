@@ -58,28 +58,32 @@ export function FeedScreen({ reloadKey, onOpenTask }: Props) {
       <h2 className="text-lg font-semibold text-slate-900">Akış</h2>
 
       <ol className="space-y-3">
-        {entries.map((entry) => (
-          <li key={entryKey(entry)} className="rounded-xl bg-white p-3 shadow-sm">
+        {groupEntries(entries).map((group) => (
+          <li key={group.key} className="rounded-xl bg-white p-3 shadow-sm">
             <p className="text-sm text-slate-900">
-              <span className="font-semibold">{entry.userName}</span> {describe(entry)}
-            </p>
-            <p className="mt-1 text-sm text-slate-700">
-              {entry.kind === 'task' ? (
+              <span className="font-semibold">{group.userName}</span>{' '}
+              {group.kind === 'task' ? (
                 <button
                   type="button"
-                  onClick={() => onOpenTask(entry.entityId)}
+                  onClick={() => onOpenTask(group.entityId)}
                   className="text-left font-medium text-teal-800 underline underline-offset-2"
                 >
-                  {entry.entityName}
+                  {group.entityName}
                 </button>
               ) : (
-                <span>
-                  {entry.kind === 'project' ? 'Faaliyet: ' : 'Ekip: '}
-                  {entry.entityName}
+                <span className="font-medium">
+                  {group.kind === 'project' ? 'Faaliyet: ' : 'Ekip: '}
+                  {group.entityName}
                 </span>
-              )}
+              )}{' '}
+              üzerinde şunları yaptı:
             </p>
-            <p className="mt-1 text-xs text-slate-500">{formatDateTime(entry.createdAt)}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              {group.items.map((entry) => (
+                <li key={entryKey(entry)}>{describe(entry)}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">{formatDateTime(group.createdAt)}</p>
           </li>
         ))}
       </ol>
@@ -112,6 +116,50 @@ function dedupe(list: FeedEntry[]): FeedEntry[] {
     seen.add(key);
     return true;
   });
+}
+
+type FeedGroup = {
+  key: string;
+  kind: FeedEntry['kind'];
+  entityId: string;
+  entityName: string;
+  userName: string;
+  createdAt: string;
+  items: FeedEntry[];
+};
+
+// Aynı kişinin aynı nesne üzerindeki ardışık kayıtları tek grupta toplar.
+// Sunucu sırası en yeniden eskiye olduğu için, grubun zamanı ilk (en yeni) kaydın zamanıdır.
+const GROUP_WINDOW_MS = 30 * 60 * 1000;
+
+function groupEntries(list: FeedEntry[]): FeedGroup[] {
+  const groups: FeedGroup[] = [];
+  for (const entry of list) {
+    const current = groups[groups.length - 1];
+    const sameTarget =
+      current !== undefined &&
+      current.kind === entry.kind &&
+      current.entityId === entry.entityId &&
+      current.userName === entry.userName;
+    const withinWindow =
+      current !== undefined &&
+      Math.abs(new Date(current.items[current.items.length - 1].createdAt).getTime() - new Date(entry.createdAt).getTime()) <=
+        GROUP_WINDOW_MS;
+    if (sameTarget && withinWindow) {
+      current.items.push(entry);
+    } else {
+      groups.push({
+        key: entryKey(entry),
+        kind: entry.kind,
+        entityId: entry.entityId,
+        entityName: entry.entityName,
+        userName: entry.userName,
+        createdAt: entry.createdAt,
+        items: [entry],
+      });
+    }
+  }
+  return groups;
 }
 
 function entryKey(entry: FeedEntry): string {
