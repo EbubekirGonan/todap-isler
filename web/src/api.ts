@@ -348,3 +348,11 @@ export async function listProjectTasks(projectId: string): Promise<Task[]> {
 export function createProject(input: NewProject): Promise<{ id: string }> {
   return request('/api/projects', { method: 'POST', body: JSON.stringify(input) });
 }
+
+export function linkProjectTeam(projectId: string, teamId: string): Promise<void> {
+  return request(`/api/projects/${projectId}/teams`, { method: 'POST', body: JSON.stringify({ teamId }) });
+}
+
+export function unlinkProjectTeam(projectId: string, teamId: string): Promise<void> {
+  return request(`/api/projects/${projectId}/teams/${teamId}`, { method: 'DELETE' });
+}

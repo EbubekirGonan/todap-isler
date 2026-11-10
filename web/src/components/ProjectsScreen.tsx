@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { listProjects, listProjectTasks, type Project, type Team } from '../api';
+import {
+  linkProjectTeam,
+  listProjects,
+  listProjectTasks,
+  unlinkProjectTeam,
+  type Project,
+  type Team,
+} from '../api';
 import { formatDateOnly } from '../format';
 import { useLoad } from '../useLoad';
 import { ProjectForm } from './ProjectForm';
@@ -23,9 +30,11 @@ export function ProjectsScreen({ reloadKey, teams, onOpenTask, onChanged }: Prop
       <ProjectDetail
         projectId={selectedId}
         project={data?.find((item) => item.id === selectedId) ?? null}
+        teams={teams}
         reloadKey={reloadKey}
         onBack={() => setSelectedId(null)}
         onOpenTask={onOpenTask}
+        onChanged={onChanged}
       />
     );
   }
@@ -72,6 +81,84 @@ export function ProjectsScreen({ reloadKey, teams, onOpenTask, onChanged }: Prop
   );
 }
 
+function ProjectTeams({ project, teams, onChanged }: { project: Project; teams: Team[]; onChanged: () => void }) {
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const linkedIds = new Set(project.teams.map((team) => team.id));
+  const available = teams.filter((team) => !linkedIds.has(team.id));
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'İşlem tamamlanamadı. Tekrar deneyin.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-2 border-t border-slate-200 pt-3">
+      <h3 className="text-sm font-medium text-slate-800">Bağlı ekipler</h3>
+      {project.teams.length === 0 && <p className="text-xs text-slate-600">Henüz bağlı ekip yok.</p>}
+      {project.teams.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {project.teams.map((team) => (
+            <li key={team.id} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-800">
+              {team.name}
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={`${team.name} bağlantısını kaldır`}
+                onClick={() => run(() => unlinkProjectTeam(project.id, team.id))}
+                className="ml-1 text-slate-500 disabled:opacity-50"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {available.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={selectedTeamId}
+            onChange={(event) => setSelectedTeamId(event.target.value)}
+            aria-label="Bağlanacak ekip"
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-2 text-sm"
+          >
+            <option value="">Ekip seçin</option>
+            {available.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={busy || !selectedTeamId}
+            onClick={() =>
+              run(async () => {
+                await linkProjectTeam(project.id, selectedTeamId);
+                setSelectedTeamId('');
+              })
+            }
+            className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            Ekle
+          </button>
+        </div>
+      )}
+      {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    </div>
+  );
+}
+
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
   const { progress } = project;
   const dueText = project.dueDate ? `Bitiş: ${formatDateOnly(project.dueDate)}` : null;
@@ -96,15 +183,19 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 function ProjectDetail({
   projectId,
   project,
+  teams,
   reloadKey,
   onBack,
   onOpenTask,
+  onChanged,
 }: {
   projectId: string;
   project: Project | null;
+  teams: Team[];
   reloadKey: number;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
+  onChanged: () => void;
 }) {
   const { data, error, loading } = useLoad(
     () => listProjectTasks(projectId),
@@ -125,6 +216,7 @@ function ProjectDetail({
             {project.progress.done}/{project.progress.total} tamamlandı
             {project.progress.openCount > 0 && ` · ${project.progress.openCount} görevde kişi aranıyor`}
           </p>
+          <ProjectTeams project={project} teams={teams} onChanged={onChanged} />
         </section>
       )}
 
