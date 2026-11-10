@@ -221,6 +221,7 @@ function ProjectEditForm({
     try {
       await updateProject(project.id, { name: name.trim(), description: description.trim() || null });
       onChanged();
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kaydedilemedi. Tekrar deneyin.');
     } finally {
