@@ -552,10 +552,28 @@ describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
     assert.ok(feed.some((e) => e.kind === "team" && e.entityName === "Sayı Ekibi" && e.field === "required_people"));
   });
 
+  test("üyesi olmadığı ekip faaliyete bağlanamaz", async () => {
+    const owner = await createUser("Üye Sahibi");
+    const outsider = await createUser("Dışarıdaki");
+    const ekip = await createTeam("Kapalı Ekip");
+    await addMember(ekip, owner);
+
+    const created = await api("POST", "/api/projects", owner, { name: "Üyelik Testi", teamIds: [ekip] });
+    const projectId = ((await created.json()) as { id: string }).id;
+    const other = await createTeam("Başka Ekip");
+    await addMember(other, owner);
+
+    assert.equal((await api("POST", "/api/projects", outsider, { name: "Yetkisiz", teamIds: [ekip] })).status, 403);
+    assert.equal((await api("POST", `/api/projects/${projectId}/teams`, outsider, { teamId: other })).status, 403);
+    assert.equal((await api("POST", `/api/projects/${projectId}/teams`, owner, { teamId: other })).status, 204);
+  });
+
   test("faaliyet birden fazla ekibe bağlanır, bağlantı kaldırılıp yeniden kurulabilir", async () => {
     const gizem = await createUser("Gizem");
     const ekip1 = await createTeam("Bağlantı Bir");
     const ekip2 = await createTeam("Bağlantı İki");
+    await addMember(ekip1, gizem);
+    await addMember(ekip2, gizem);
 
     const created = await api("POST", "/api/projects", gizem, { name: "Ortak Faaliyet", teamIds: [ekip1, ekip2] });
     assert.equal(created.status, 201);
