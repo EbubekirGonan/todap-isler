@@ -41,7 +41,7 @@ Herkes için:
 5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
 
 6. Takımlar: Tüm takımların listesi. Her takımda kadro durumu ("x/y kişi · n açık yer" veya "Kadro dolu") ve o takımın üstlendiği faaliyetler görünür. Bir kişi bir takıma aynı anda bir kez girer; ayrıldıktan sonra tekrar katılabilir. Katılım yalnızca açık yer varsa mümkündür (gerekli kişi sayısı − aktif üye sayısı > 0). Gerekli kişi sayısı sonradan düzenlenebilir.
-7. Akış: Uygulamada yapılan hareketlerin günlüğü (herkese açık). Kim ne yaptı, neyi ekledi, değiştirdi, kimi ekipten çıkardı gibi kayıtlar en yeniden eskiye listelenir; "Daha fazla" ile eski kayıtlar açılır. Ekibe özel görevlerin başlığı yalnızca o ekibin aktif üyelerine gösterilir.
+7. Akış: Uygulamada yapılan hareketlerin günlüğü (herkese açık). Kim ne yaptı, neyi ekledi, değiştirdi, kimi ekipten çıkardı gibi kayıtlar en yeniden eskiye listelenir; "Daha fazla" ile eski kayıtlar açılır. Ekibe özel görevlerin başlığı herkese gösterilir (bkz. Kararlar 1).
 
 Sadece üyelere (şimdilik):
 8. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
