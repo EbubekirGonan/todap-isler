@@ -66,6 +66,21 @@ export async function isTeamMember(userId: string, teamId: string): Promise<bool
   return result.rowCount === 1;
 }
 
+// Ekip sayfası (görevler ve sohbet) okunabilir: aktif üyeler ve yönetici (salt okuma).
+export async function canReadTeamPage(user: { id: string; isAdmin: boolean }, teamId: string): Promise<boolean> {
+  return user.isAdmin || (await isTeamMember(user.id, teamId));
+}
+
+// Ekip sohbetine yalnızca o ekibin aktif üyeleri yazabilir. Yönetici yalnızca okur.
+export async function canPostTeamMessage(userId: string, teamId: string): Promise<boolean> {
+  return isTeamMember(userId, teamId);
+}
+
+// Mesajı düzenleme ve silme yalnızca yazarına açıktır; yazar ekipten ayrıldıysa yapamaz.
+export async function canChangeTeamMessage(userId: string, teamId: string, authorId: string): Promise<boolean> {
+  return authorId === userId && (await isTeamMember(userId, teamId));
+}
+
 // Yönetici uçları yalnızca admin kullanıcıya açıktır. requireAuth'tan sonra kullanılmalıdır.
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.user?.isAdmin) {

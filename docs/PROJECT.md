@@ -86,6 +86,7 @@ task_assignments(id, task_id, user_id, role ['owner' | 'support' | 'approver'],
 
 task_comments(id, task_id, user_id, body, created_at)
 task_history(id, task_id, user_id, field, old_value, new_value, created_at)  -- denetim kaydı
+team_messages(id, team_id, user_id, body CHECK 1..2000, created_at, updated_at, deleted_at NULL)  -- ekip sohbeti; Akış'a yazılmaz
 
 Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignments(user_id) WHERE ended_at IS NULL, team_members(user_id) WHERE ended_at IS NULL.
 
@@ -132,6 +133,7 @@ Ekip mesajları (team_messages): Her ekip sayfasında ekip içi ortak sohbet (or
 - Mesajlar Akış'a, Dernek'e veya başka bir yere yansımaz.
 - Mesaj yazan kişi kendi mesajını düzenleyebilir ve silebilir (yumuşak silme, deleted_at). Düzenlenen mesaj "düzenlendi" olarak işaretlenir.
 - Yenileme: Sayfa açıkken 30 sn'de bir otomatik yenileme yapılmaz. Sayfada yenile düğmesi bulunur; sekme tekrar öne geldiğinde de liste yenilenir.
+- Görünüm: Mesajlar eskiden yeniye sıralanır. Kapalıyken yalnızca son 3 mesaj görünür, üstü buğulanır ve "Eski konuşmaları gör" ile tüm liste açılır. Açıkken sağ üstteki × ile tekrar kapanır. Yazma "+" düğmesi sağ altta sabittir ve kutu açık/kapalı fark etmez aynı yerde durur.
 - Yetki kuralı tek bir modülde (policy/visibility) toplanır.
 Şimdilik dışında (sonraya bırak, şemayı bunlara engel olmayacak şekilde tut): workflow motoru, görev bağımlılıkları, bildirimler, tekrarlayan görevler, "sürekli sorumluluklar" (responsibilities tabloları), onay akışları, zaman takibi, raporlama panoları, kanban görünümü.
 

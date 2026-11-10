@@ -2,7 +2,12 @@ import { Router } from "express";
 import { requireAuth } from "../auth/session.js";
 import { query } from "../db.js";
 import { HttpError } from "../http-error.js";
-import { isTeamMember, requireAdmin } from "../policy/visibility.js";
+import {
+  canChangeTeamMessage,
+  canPostTeamMessage,
+  canReadTeamPage,
+  requireAdmin,
+} from "../policy/visibility.js";
 import { listTasks } from "../tasks/service.js";
 import {
   asObject,
@@ -23,6 +28,16 @@ import {
   type NewTeam,
   type TeamEdit,
 } from "./service.js";
+import {
+  MESSAGE_MAX_LENGTH,
+  MESSAGE_PAGE_SIZE,
+  createTeamMessage,
+  deleteTeamMessage,
+  findTeamMessage,
+  listTeamMessages,
+  teamExists,
+  updateTeamMessage,
+} from "./messages.js";
 
 export const teamsRouter = Router();
 
@@ -96,10 +111,10 @@ teamsRouter.get("/:id", async (req, res) => {
   res.json({ team: await getTeamDetail(req.user!.id, id) });
 });
 
-// Ekip görevleri yalnızca o ekibin aktif üyelerine açıktır.
+// Ekip görevleri aktif üyelere ve yöneticiye (salt okuma) açıktır.
 teamsRouter.get("/:id/tasks", async (req, res) => {
   const id = parseId(req.params.id, "Geçersiz ekip kimliği.");
-  if (!(await isTeamMember(req.user!.id, id))) {
+  if (!(await canReadTeamPage(req.user!, id))) {
     throw new HttpError(403, "Bu ekibin görevlerini yalnızca üyeleri görebilir.");
   }
   const tasks = await listTasks(req.user!.id, {
@@ -139,6 +154,70 @@ teamsRouter.patch("/:id", async (req, res) => {
   }
   await updateTeam(req.user!.id, id, edit);
   res.json({ team: await getTeamDetail(req.user!.id, id) });
+});
+
+// Ekip sohbeti: okuma aktif üyelere ve yöneticiye açıktır; yazma yalnızca aktif üyelere.
+// Sayfalama, en yeni mesajdan geriye doğru `before` imleciyle yapılır.
+function parseMessageLimit(value: unknown): number {
+  if (value === undefined) {
+    return MESSAGE_PAGE_SIZE;
+  }
+  const limit = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!(limit >= 1 && limit <= 100)) {
+    throw new HttpError(400, "Sayfa boyutu 1 ile 100 arasında olmalıdır.");
+  }
+  return limit;
+}
+
+function parseMessageBody(body: unknown): string {
+  const data = asObject(body);
+  return parseRequiredText(data.body, "Mesaj", MESSAGE_MAX_LENGTH);
+}
+
+teamsRouter.get("/:id/messages", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz ekip kimliği.");
+  if (!(await canReadTeamPage(req.user!, id))) {
+    throw new HttpError(403, "Bu ekibin sohbetini yalnızca üyeleri görebilir.");
+  }
+  if (!(await teamExists(id))) {
+    throw new HttpError(404, "Ekip bulunamadı.");
+  }
+  const before = req.query.before === undefined ? null : parseId(req.query.before, "Geçersiz sayfa imleci.");
+  const limit = parseMessageLimit(req.query.limit);
+  res.json(await listTeamMessages(req.user!.id, id, before, limit));
+});
+
+teamsRouter.post("/:id/messages", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz ekip kimliği.");
+  const body = parseMessageBody(req.body);
+  if (!(await canPostTeamMessage(req.user!.id, id))) {
+    throw new HttpError(403, "Ekip sohbetine yalnızca ekibin üyeleri yazabilir.");
+  }
+  const messageId = await createTeamMessage(req.user!.id, id, body);
+  res.status(201).json({ id: messageId });
+});
+
+teamsRouter.patch("/:id/messages/:messageId", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz ekip kimliği.");
+  const messageId = parseId(req.params.messageId, "Geçersiz mesaj kimliği.");
+  const body = parseMessageBody(req.body);
+  const message = await findTeamMessage(id, messageId);
+  if (!(await canChangeTeamMessage(req.user!.id, id, message.user_id))) {
+    throw new HttpError(403, "Yalnızca kendi mesajınızı düzenleyebilirsiniz.");
+  }
+  await updateTeamMessage(id, messageId, body);
+  res.status(204).end();
+});
+
+teamsRouter.delete("/:id/messages/:messageId", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz ekip kimliği.");
+  const messageId = parseId(req.params.messageId, "Geçersiz mesaj kimliği.");
+  const message = await findTeamMessage(id, messageId);
+  if (!(await canChangeTeamMessage(req.user!.id, id, message.user_id))) {
+    throw new HttpError(403, "Yalnızca kendi mesajınızı silebilirsiniz.");
+  }
+  await deleteTeamMessage(id, messageId);
+  res.status(204).end();
 });
 
 // Yalnızca yönetici: ekipteki bir kişinin üyeliğini sonlandırır.

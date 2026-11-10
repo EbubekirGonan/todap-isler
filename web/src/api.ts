@@ -165,6 +165,38 @@ export function removeTeamMember(teamId: string, userId: string): Promise<void> 
   return request(`/api/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
 }
 
+export type TeamMessage = {
+  id: string;
+  body: string;
+  authorName: string;
+  isMine: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
+export type TeamMessagePage = {
+  messages: TeamMessage[];
+  hasMore: boolean;
+};
+
+// Mesajlar en yeni sayfadan başlar; `before` verilirse ondan daha eski mesajlar gelir.
+export function listTeamMessages(teamId: string, before?: string): Promise<TeamMessagePage> {
+  const params = before ? `?before=${before}` : '';
+  return request<TeamMessagePage>(`/api/teams/${teamId}/messages${params}`);
+}
+
+export function postTeamMessage(teamId: string, body: string): Promise<{ id: string }> {
+  return request(`/api/teams/${teamId}/messages`, { method: 'POST', body: JSON.stringify({ body }) });
+}
+
+export function updateTeamMessage(teamId: string, messageId: string, body: string): Promise<void> {
+  return request(`/api/teams/${teamId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+}
+
+export function deleteTeamMessage(teamId: string, messageId: string): Promise<void> {
+  return request(`/api/teams/${teamId}/messages/${messageId}`, { method: 'DELETE' });
+}
+
 export function removeTaskAssignment(taskId: string, userId: string): Promise<void> {
   return request(`/api/tasks/${taskId}/assignments/${userId}`, { method: 'DELETE' });
 }

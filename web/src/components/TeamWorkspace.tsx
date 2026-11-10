@@ -4,6 +4,7 @@ import { formatDateOnly } from '../format';
 import { useLoad } from '../useLoad';
 import { Spinner } from './Spinner';
 import { TaskCard } from './TaskCard';
+import { TeamChat } from './TeamChat';
 
 type Props = {
   team: Team;
@@ -69,6 +70,8 @@ export function TeamWorkspace({ team, reloadKey, onOpenTask }: Props) {
           )}
         </div>
       </section>
+
+      <TeamChat teamId={team.id} canWrite={detail.data?.isMember ?? false} />
     </div>
   );
 }

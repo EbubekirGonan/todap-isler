@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getMyTeams, logout, type CurrentUser, type Team } from '../api';
+import { getMyTeams, listTeams, logout, type CurrentUser, type Team, type TeamSummary } from '../api';
 import { AllTasksScreen } from './AllTasksScreen';
 import { AssociationScreen } from './AssociationScreen';
 import { FeedScreen } from './FeedScreen';
@@ -28,15 +28,29 @@ const FIXED_TABS: TabItem[] = [
   { key: 'association', label: 'Dernek' },
 ];
 
+// Yönetici tüm ekiplerin sayfasını salt okuma açabilir; sekme için bu liste Team biçimine çevrilir.
+function summaryToTeam(team: TeamSummary): Team {
+  return {
+    id: team.id,
+    name: team.name,
+    description: team.description,
+    type: team.type,
+    term_start: team.termStart,
+    term_end: team.termEnd,
+    role_title: null,
+  };
+}
+
 export function AppShell({ user, onSignedOut }: Props) {
   const [teams, setTeams] = useState<Team[] | null>(null);
+  const [allTeams, setAllTeams] = useState<Team[] | null>(null);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState('mine');
   const [reloadKey, setReloadKey] = useState(0);
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  // Ekip sekmeleri üyeliğe göre oluştuğu için katılma ve ayrılmada yeniden okunur.
+  // Ekip sekmeleri üyeliğe göre oluşur; yönetici için tüm ekipler listelenir. Katılma ve ayrılmada yeniden okunur.
   const loadTeams = useCallback(() => {
     getMyTeams()
       .then((list) => {
@@ -44,15 +58,21 @@ export function AppShell({ user, onSignedOut }: Props) {
         setTeamsError(null);
       })
       .catch(() => setTeamsError('Ekipler yüklenemedi.'));
-  }, []);
+    if (user.isAdmin) {
+      listTeams()
+        .then((list) => setAllTeams(list.map(summaryToTeam)))
+        .catch(() => setTeamsError('Ekipler yüklenemedi.'));
+    }
+  }, [user.isAdmin]);
 
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
 
-  const teamTabs: TabItem[] = (teams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
+  const tabTeams = user.isAdmin ? allTeams : teams;
+  const teamTabs: TabItem[] = (tabTeams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
   const tabs = [...FIXED_TABS, ...teamTabs];
-  const activeTeam = teams?.find((team) => `team:${team.id}` === activeKey) ?? null;
+  const activeTeam = tabTeams?.find((team) => `team:${team.id}` === activeKey) ?? null;
   const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
 
   function refreshLists() {
