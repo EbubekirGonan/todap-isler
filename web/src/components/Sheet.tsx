@@ -26,8 +26,13 @@ export function Sheet({ title, onClose, children }: Props) {
       >
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-1 text-slate-600 hover:bg-slate-100">
-            Kapat
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Kapat"
+            className="rounded-md px-2 py-1 text-xl leading-none text-slate-600 hover:bg-slate-100"
+          >
+            ×
           </button>
         </header>
         <div className="overflow-y-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>

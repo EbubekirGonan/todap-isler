@@ -102,7 +102,73 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
 
       {task && (
         <div className="space-y-5">
-          <TaskBadges task={task} />
+          <div className="flex items-start justify-between gap-2">
+            <TaskBadges task={task} />
+            {!isDone && (
+              <div ref={menuRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-label="Görev işlemleri"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  className="rounded-md px-3 py-1 text-xl leading-none text-slate-700 hover:bg-slate-100"
+                >
+                  ⋮
+                </button>
+                {menuOpen && (
+                  <ul
+                    role="menu"
+                    className="absolute right-0 z-10 mt-1 w-56 overflow-hidden rounded-md bg-white text-sm shadow-lg ring-1 ring-slate-200"
+                  >
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setEditing(true);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
+                      >
+                        Düzenle
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-expanded={assignOpen}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setAssignOpen((open) => !open);
+                        }}
+                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
+                      >
+                        Başkasına ata
+                      </button>
+                    </li>
+                    {(isOwnerMine || isSupporterMine) && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={busy}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            confirmAndRun('Bu işten ayrılmak istediğinize emin misiniz?', () => releaseTask(taskId));
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          Bırakmak durumundayım
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
 
           {!editing && task.description && <p className="whitespace-pre-wrap text-slate-800">{task.description}</p>}
 
@@ -163,67 +229,6 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                   Destek atabilirim
                 </button>
               )}
-              <div ref={menuRef} className="relative ml-auto">
-                <button
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={() => setMenuOpen((open) => !open)}
-                  className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-800"
-                >
-                  İşlemler
-                </button>
-                {menuOpen && (
-                  <ul
-                    role="menu"
-                    className="absolute right-0 z-10 mt-1 w-56 overflow-hidden rounded-md bg-white text-sm shadow-lg ring-1 ring-slate-200"
-                  >
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setEditing(true);
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
-                      >
-                        Düzenle
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        aria-expanded={assignOpen}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setAssignOpen((open) => !open);
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-slate-100"
-                      >
-                        Başkasına ata
-                      </button>
-                    </li>
-                    {(isOwnerMine || isSupporterMine) && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={busy}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            confirmAndRun('Bu işten ayrılmak istediğinize emin misiniz?', () => releaseTask(taskId));
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-slate-100 disabled:opacity-50"
-                        >
-                          Bırakmak durumundayım
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                )}
-              </div>
             </div>
           )}
 
