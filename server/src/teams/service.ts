@@ -22,7 +22,7 @@ export type TeamRow = {
   is_member: boolean;
 };
 
-// Açık kontenjan: gerekli kişi sayısı - aktif üye sayısı. Pozitifse takım katılıma açıktır.
+// Açık kontenjan: gerekli kişi sayısı - aktif üye sayısı. Pozitifse ekip katılıma açıktır.
 export function teamDto(row: TeamRow) {
   const openSlots = Math.max(row.required_people - row.active_count, 0);
   return {
@@ -85,10 +85,13 @@ export async function getTeamDetail(userId: string, teamId: string) {
   };
 }
 
-// Takım satırını kilitler; katılım ve kontenjan kontrolleri aynı anda çalışan isteklerde yarışmasın diye.
-async function lockTeam(client: pg.PoolClient, teamId: string): Promise<{ id: string; name: string; required_people: number }> {
-  const result = await client.query<{ id: string; name: string; required_people: number }>(
-    "SELECT id, name, required_people FROM teams WHERE id = $1 FOR UPDATE",
+// Ekip satırını kilitler; katılım ve kontenjan kontrolleri aynı anda çalışan isteklerde yarışmasın diye.
+async function lockTeam(
+  client: pg.PoolClient,
+  teamId: string,
+): Promise<{ id: string; name: string; description: string | null; required_people: number }> {
+  const result = await client.query<{ id: string; name: string; description: string | null; required_people: number }>(
+    "SELECT id, name, description, required_people FROM teams WHERE id = $1 FOR UPDATE",
     [teamId],
   );
   const team = result.rows[0];
@@ -137,60 +140,125 @@ export async function joinTeam(userId: string, teamId: string): Promise<void> {
 
 // Ayrılma: üyelik kapanır (ended_at). Ekibe özel açık bir görevde atanmışsa önce o atama bırakılmalıdır.
 export async function leaveTeam(userId: string, teamId: string): Promise<void> {
-  await withTransaction(async (client) => {
-    const team = await lockTeam(client, teamId);
+  await withTransaction((client) => endMembership(client, teamId, userId, "left"));
+}
 
-    const membership = await client.query(
-      "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2 AND ended_at IS NULL FOR UPDATE",
-      [teamId, userId],
-    );
-    if (!membership.rowCount) {
-      throw new HttpError(409, "Bu ekipte aktif üyeliğiniz yok.");
-    }
+// Yönetici çıkarması da aynı kuralları uygular; yalnızca akışta "çıkarıldı" olarak kaydedilir.
+export async function removeTeamMember(teamId: string, userId: string): Promise<void> {
+  await withTransaction((client) => endMembership(client, teamId, userId, "removed"));
+}
 
-    const assigned = await client.query(
-      `SELECT 1
-         FROM task_assignments a
-         JOIN tasks t ON t.id = a.task_id
-        WHERE a.user_id = $1 AND a.ended_at IS NULL
-          AND t.team_only = true AND t.team_id = $2
-          AND t.deleted_at IS NULL AND t.status <> 'done'
-        LIMIT 1`,
-      [userId, teamId],
-    );
-    if (assigned.rowCount) {
-      throw new HttpError(409, "Ekibe özel bir görevde katkınız var. Önce o görevden ayrılmalısınız.");
-    }
+async function endMembership(
+  client: pg.PoolClient,
+  teamId: string,
+  userId: string,
+  action: "left" | "removed",
+): Promise<void> {
+  const team = await lockTeam(client, teamId);
 
-    await client.query("UPDATE team_members SET ended_at = now() WHERE id = $1", [membership.rows[0].id]);
-    await recordActivity(client, {
-      userId,
-      action: "left",
-      entityType: "team",
-      entityId: teamId,
-      entityName: team.name,
-    });
+  const membership = await client.query(
+    "SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2 AND ended_at IS NULL FOR UPDATE",
+    [teamId, userId],
+  );
+  if (!membership.rowCount) {
+    throw new HttpError(409, "Bu ekipte aktif üyelik yok.");
+  }
+
+  const assigned = await client.query(
+    `SELECT 1
+       FROM task_assignments a
+       JOIN tasks t ON t.id = a.task_id
+      WHERE a.user_id = $1 AND a.ended_at IS NULL
+        AND t.team_only = true AND t.team_id = $2
+        AND t.deleted_at IS NULL AND t.status <> 'done'
+      LIMIT 1`,
+    [userId, teamId],
+  );
+  if (assigned.rowCount) {
+    throw new HttpError(409, "Ekibe özel açık bir görevde katkı var. Önce o görevden ayrılmalıdır.");
+  }
+
+  await client.query("UPDATE team_members SET ended_at = now() WHERE id = $1", [membership.rows[0].id]);
+  await recordActivity(client, {
+    userId,
+    action,
+    entityType: "team",
+    entityId: teamId,
+    entityName: team.name,
   });
 }
 
-// Gerekli kişi sayısı herkes tarafından düzenlenebilir.
-export async function updateTeamRequiredPeople(userId: string, teamId: string, requiredPeople: number): Promise<void> {
+export type NewTeam = {
+  name: string;
+  description: string | null;
+  type: "term" | "ongoing";
+  termStart: string | null;
+  termEnd: string | null;
+  requiredPeople: number;
+};
+
+// Ekip herkes tarafından kurulabilir. Kuruluşta üyelik açılmaz; kişiler katılım uçlarıyla eklenir.
+export async function createTeam(input: NewTeam): Promise<string> {
+  const result = await query<{ id: string }>(
+    `INSERT INTO teams (name, description, type, term_start, term_end, required_people)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [input.name, input.description, input.type, input.termStart, input.termEnd, input.requiredPeople],
+  );
+  return result.rows[0].id;
+}
+
+// Gönderilmeyen alanlar mevcut değerini korur. Her değişen alan için ayrı kayıt yazılır.
+export type TeamEdit = {
+  name?: string;
+  description?: string | null;
+  requiredPeople?: number;
+};
+
+export async function updateTeam(userId: string, teamId: string, edit: TeamEdit): Promise<void> {
   await withTransaction(async (client) => {
     const team = await lockTeam(client, teamId);
-    if (team.required_people === requiredPeople) {
+    const next = {
+      name: edit.name ?? team.name,
+      description: edit.description !== undefined ? edit.description : team.description,
+      requiredPeople: edit.requiredPeople ?? team.required_people,
+    };
+
+    const changes: { field: string; oldValue: string | null; newValue: string | null }[] = [];
+    if (team.name !== next.name) {
+      changes.push({ field: "name", oldValue: team.name, newValue: next.name });
+    }
+    if ((team.description ?? null) !== next.description) {
+      changes.push({ field: "description", oldValue: team.description, newValue: next.description });
+    }
+    if (team.required_people !== next.requiredPeople) {
+      changes.push({
+        field: "required_people",
+        oldValue: String(team.required_people),
+        newValue: String(next.requiredPeople),
+      });
+    }
+    if (changes.length === 0) {
       return;
     }
 
-    await client.query("UPDATE teams SET required_people = $2 WHERE id = $1", [teamId, requiredPeople]);
-    await recordActivity(client, {
-      userId,
-      action: "updated",
-      entityType: "team",
-      entityId: teamId,
-      entityName: team.name,
-      field: "required_people",
-      oldValue: String(team.required_people),
-      newValue: String(requiredPeople),
-    });
+    await client.query("UPDATE teams SET name = $2, description = $3, required_people = $4 WHERE id = $1", [
+      teamId,
+      next.name,
+      next.description,
+      next.requiredPeople,
+    ]);
+    for (const change of changes) {
+      await recordActivity(client, {
+        userId,
+        action: "updated",
+        entityType: "team",
+        entityId: teamId,
+        entityName: next.name,
+        field: change.field,
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+      });
+    }
   });
 }

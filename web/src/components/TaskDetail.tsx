@@ -6,6 +6,7 @@ import {
   getTask,
   listUsers,
   releaseTask,
+  removeTaskAssignment,
   supportTask,
   updateTask,
   type Task,
@@ -23,13 +24,15 @@ const STATUS_OPTIONS: TaskStatus[] = ['planning', 'in_progress', 'nearly_done', 
 type Props = {
   taskId: string;
   currentUserId: string;
+  isAdmin: boolean;
   onClose: () => void;
   onChanged: () => void;
 };
 
-export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props) {
+export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged }: Props) {
   const [version, setVersion] = useState(0);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -164,6 +167,22 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                         </button>
                       </li>
                     )}
+                    {isAdmin && task.assignments.length > 0 && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          aria-expanded={removeOpen}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setRemoveOpen((open) => !open);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-100"
+                        >
+                          Kişi çıkar
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>
@@ -246,6 +265,38 @@ export function TaskDetail({ taskId, currentUserId, onClose, onChanged }: Props)
                       className="w-full rounded-md bg-white px-3 py-2 text-left text-sm ring-1 ring-slate-200 disabled:opacity-50"
                     >
                       {user.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {removeOpen && isAdmin && !isDone && (
+            <section aria-label="Kişi çıkar" className="rounded-xl border border-slate-200 p-3">
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">Bu işten kim çıkarılsın?</h3>
+              <ul className="space-y-2">
+                {task.assignments.map((assignment) => (
+                  <li key={assignment.userId} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-800">
+                      {assignment.name}
+                      <span className="text-slate-500">
+                        {' · '}
+                        {assignment.role === 'owner' ? 'Sorumlu' : 'Destek'}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        confirmAndRun(`${assignment.name} bu işten çıkarılsın mı?`, async () => {
+                          await removeTaskAssignment(taskId, assignment.userId);
+                          setRemoveOpen(false);
+                        })
+                      }
+                      className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-200 disabled:opacity-50"
+                    >
+                      Çıkar
                     </button>
                   </li>
                 ))}

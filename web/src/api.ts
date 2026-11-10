@@ -95,7 +95,7 @@ export type TeamProjectSummary = {
   dueDate: string | null;
 };
 
-// Takım listesi ve detayı: kontenjan bilgisi ve katılım durumu dahil.
+// Ekip listesi ve detayı: kontenjan bilgisi ve katılım durumu dahil.
 export type TeamSummary = {
   id: string;
   name: string;
@@ -133,12 +133,40 @@ export function leaveTeam(teamId: string): Promise<void> {
   return request(`/api/teams/${teamId}/leave`, { method: 'POST' });
 }
 
-export async function updateTeamRequiredPeople(teamId: string, requiredPeople: number): Promise<TeamDetail> {
+export type NewTeam = {
+  name: string;
+  description: string | null;
+  type: 'term' | 'ongoing';
+  termStart: string | null;
+  termEnd: string | null;
+  requiredPeople: number;
+};
+
+export function createTeam(input: NewTeam): Promise<{ id: string }> {
+  return request('/api/teams', { method: 'POST', body: JSON.stringify(input) });
+}
+
+// Gönderilmeyen alanlar değişmez; yalnızca gönderilenler güncellenir.
+export type TeamEdit = {
+  name?: string;
+  description?: string | null;
+  requiredPeople?: number;
+};
+
+export async function updateTeam(teamId: string, edit: TeamEdit): Promise<TeamDetail> {
   const data = await request<{ team: TeamDetail }>(`/api/teams/${teamId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ requiredPeople }),
+    body: JSON.stringify(edit),
   });
   return data.team;
+}
+
+export function removeTeamMember(teamId: string, userId: string): Promise<void> {
+  return request(`/api/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
+}
+
+export function removeTaskAssignment(taskId: string, userId: string): Promise<void> {
+  return request(`/api/tasks/${taskId}/assignments/${userId}`, { method: 'DELETE' });
 }
 
 // Akış kaydı: görev hareketleri (kind 'task'), faaliyet ve ekip hareketleri.
@@ -306,6 +334,69 @@ export async function listAllTasks(filters: TaskListFilters): Promise<Task[]> {
   if (filters.overdue) params.set('overdue', 'true');
   const data = await request<{ tasks: Task[] }>(`/api/tasks?${params.toString()}`);
   return data.tasks;
+}
+
+export type AssociationMember = {
+  userId: string;
+  name: string;
+  roleTitle: string | null;
+};
+
+// Dernek sekmesi: herkese açık ekip listesi, dönem bilgisi ve aktif üyeler.
+export type AssociationTeam = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 'term' | 'ongoing';
+  termStart: string | null;
+  termEnd: string | null;
+  members: AssociationMember[];
+};
+
+export async function listAssociationTeams(): Promise<AssociationTeam[]> {
+  const data = await request<{ teams: AssociationTeam[] }>('/api/association/teams');
+  return data.teams;
+}
+
+// Ekip görevleri yalnızca üyelere açıktır; üye olmayan istekte sunucu 403 döner.
+export async function listTeamTasks(teamId: string, includeDone: boolean): Promise<Task[]> {
+  const params = includeDone ? '?includeDone=true' : '';
+  const data = await request<{ tasks: Task[] }>(`/api/teams/${teamId}/tasks${params}`);
+  return data.tasks;
+}
+
+export type NewAdminUser = {
+  name: string;
+  email: string;
+  phone: string | null;
+};
+
+export function createAdminUser(input: NewAdminUser): Promise<{ id: string }> {
+  return request('/api/admin/users', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export type NewAdminTeam = {
+  name: string;
+  description: string | null;
+  type: 'term' | 'ongoing';
+  termStart: string | null;
+  termEnd: string | null;
+  requiredPeople: number;
+};
+
+export function createAdminTeam(input: NewAdminTeam): Promise<{ id: string }> {
+  return request('/api/admin/teams', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function addAdminTeamMember(teamId: string, userId: string, roleTitle: string | null): Promise<void> {
+  return request(`/api/admin/teams/${teamId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, roleTitle }),
+  });
+}
+
+export function removeAdminTeamMember(teamId: string, userId: string): Promise<void> {
+  return request(`/api/admin/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
 }
 
 export type ProjectProgress = {

@@ -34,6 +34,7 @@ const verifyLimiter = rateLimit({
 
 export const authRouter = Router();
 
+// Geçersiz e-posta null döner.
 function normalizeEmail(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;

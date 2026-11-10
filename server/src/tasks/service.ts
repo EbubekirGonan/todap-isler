@@ -34,6 +34,8 @@ export type TaskFilters = {
   scope: TaskScope;
   status?: TaskStatus;
   projectId?: string;
+  // Yalnızca bu ekibe bağlı görevler (ekip sekmesi).
+  teamId?: string;
   // Durum verilmemişse varsayılan olarak tamamlananlar gizlenir; bu bayrak onları da ekler.
   includeDone?: boolean;
   // Yalnızca tahmini kişi sayısına ulaşılmamış görevler (kişi aranıyor).
@@ -159,6 +161,9 @@ export async function listTasks(userId: string, filters: TaskFilters) {
   }
   if (filters.projectId) {
     conditions.push(`t.project_id = ${bind(filters.projectId)}`);
+  }
+  if (filters.teamId) {
+    conditions.push(`t.team_id = ${bind(filters.teamId)}`);
   }
 
   if (filters.overdue) {
@@ -383,6 +388,22 @@ export async function releaseTask(userId: string, taskId: string): Promise<void>
     const roles = await endAssignments(client, taskId, userId, userId, name);
     if (roles.length === 0) {
       throw new HttpError(409, "Bu görevde üstlenmiş biriniz yok.");
+    }
+    await touchTask(client, taskId);
+  });
+}
+
+// Yönetici, bir görevdeki herhangi bir kişinin üstlenme ya da destek kaydını kapatır. Görünürlük kuralı admin için uygulanmaz.
+export async function removeTaskAssignments(adminId: string, taskId: string, targetUserId: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const task = await client.query("SELECT id FROM tasks WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", [taskId]);
+    if (!task.rowCount) {
+      throw new HttpError(404, "Görev bulunamadı.");
+    }
+    const name = await getUserName(client, targetUserId);
+    const roles = await endAssignments(client, taskId, targetUserId, adminId, name);
+    if (roles.length === 0) {
+      throw new HttpError(409, "Bu görevde bu kişinin aktif bir üstlenmesi yok.");
     }
     await touchTask(client, taskId);
   });

@@ -10,7 +10,7 @@ import {
   parseOptionalText,
   parseRequiredText,
 } from "../validation.js";
-import type { TaskScope } from "../policy/visibility.js";
+import { requireAdmin, type TaskScope } from "../policy/visibility.js";
 import {
   addComment,
   assignTask,
@@ -20,6 +20,7 @@ import {
   getTask,
   listTasks,
   releaseTask,
+  removeTaskAssignments,
   supportTask,
   updateTask,
   type TaskFilters,
@@ -188,6 +189,16 @@ tasksRouter.post("/:id/claim", async (req, res) => {
 tasksRouter.post("/:id/release", async (req, res) => {
   await releaseTask(currentUserId(req), parseId(req.params.id, "Geçersiz görev kimliği."));
   res.json({ ok: true });
+});
+
+// Yalnızca yönetici: görevdeki bir kişinin üstlenmesini kaldırır.
+tasksRouter.delete("/:id/assignments/:userId", requireAdmin, async (req, res) => {
+  await removeTaskAssignments(
+    currentUserId(req),
+    parseId(req.params.id, "Geçersiz görev kimliği."),
+    parseId(req.params.userId, "Geçersiz kişi."),
+  );
+  res.status(204).end();
 });
 
 tasksRouter.post("/:id/support", async (req, res) => {

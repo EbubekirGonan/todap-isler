@@ -486,7 +486,7 @@ describe("projeler ilerleme sayıları", () => {
   });
 });
 
-describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
+describe("ekipler, faaliyet-ekip bağlantıları ve akış", () => {
   async function setRequired(teamId: string, count: number): Promise<void> {
     await query("UPDATE teams SET required_people = $2 WHERE id = $1", [teamId, count]);
   }

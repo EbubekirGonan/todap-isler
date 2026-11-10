@@ -1,3 +1,4 @@
+import type { NextFunction, Request, Response } from "express";
 import type pg from "pg";
 import { query } from "../db.js";
 
@@ -54,4 +55,22 @@ export async function isActiveTeamMember(
     [teamId, userId],
   );
   return result.rowCount === 1;
+}
+
+// Ekip sekmesi ve ekip görevleri yalnızca aktif üyelere açıktır.
+export async function isTeamMember(userId: string, teamId: string): Promise<boolean> {
+  const result = await query(
+    "SELECT 1 FROM team_members WHERE team_id = $1 AND user_id = $2 AND ended_at IS NULL",
+    [teamId, userId],
+  );
+  return result.rowCount === 1;
+}
+
+// Yönetici uçları yalnızca admin kullanıcıya açıktır. requireAuth'tan sonra kullanılmalıdır.
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user?.isAdmin) {
+    res.status(403).json({ error: "Bu işlem için yönetici yetkisi gerekiyor." });
+    return;
+  }
+  next();
 }

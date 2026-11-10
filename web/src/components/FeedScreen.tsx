@@ -22,6 +22,7 @@ const PROJECT_ACTION_LABELS: Record<string, string> = {
 const TEAM_ACTION_LABELS: Record<string, string> = {
   joined: 'Ekibe katıldı',
   left: 'Ekipten ayrıldı',
+  removed: 'Ekipten çıkarıldı',
 };
 
 // Akış, işlemlerin kayıt günlüğüdür. Sunucu kayıtları en yeniden eskiye verir.
@@ -173,6 +174,12 @@ function describe(entry: FeedEntry): string {
   if (entry.kind === 'project') return PROJECT_ACTION_LABELS[entry.action ?? ''] ?? 'Faaliyette değişiklik yaptı';
   if (entry.action === 'updated' && entry.field === 'required_people') {
     return `Kadro sayısını ${entry.oldValue ?? '?'} → ${entry.newValue ?? '?'} olarak değiştirdi`;
+  }
+  if (entry.action === 'updated' && entry.field === 'name') {
+    return `Ekip adını ${entry.oldValue ?? '?'} → ${entry.newValue ?? '?'} olarak değiştirdi`;
+  }
+  if (entry.action === 'updated' && entry.field === 'description') {
+    return 'Ekip açıklamasını değiştirdi';
   }
   return TEAM_ACTION_LABELS[entry.action ?? ''] ?? 'Ekipte değişiklik yaptı';
 }

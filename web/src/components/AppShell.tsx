@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMyTeams, logout, type CurrentUser, type Team } from '../api';
 import { AllTasksScreen } from './AllTasksScreen';
+import { AssociationScreen } from './AssociationScreen';
 import { FeedScreen } from './FeedScreen';
 import { MyTasksScreen } from './MyTasksScreen';
 import { PoolScreen } from './PoolScreen';
@@ -8,6 +9,7 @@ import { ProjectsScreen } from './ProjectsScreen';
 import { TabBar, type TabItem } from './TabBar';
 import { TaskDetail } from './TaskDetail';
 import { TaskForm } from './TaskForm';
+import { TeamWorkspace } from './TeamWorkspace';
 import { TeamsScreen } from './TeamsScreen';
 
 
@@ -21,7 +23,7 @@ const FIXED_TABS: TabItem[] = [
   { key: 'pool', label: 'Havuz' },
   { key: 'projects', label: 'Faaliyetler' },
   { key: 'tasks', label: 'Tüm İşler' },
-  { key: 'teams', label: 'Takımlar' },
+  { key: 'teams', label: 'Ekipler' },
   { key: 'feed', label: 'Akış' },
   { key: 'association', label: 'Dernek' },
 ];
@@ -107,17 +109,19 @@ export function AppShell({ user, onSignedOut }: Props) {
         {activeKey === 'tasks' && (
           <AllTasksScreen reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
-        {activeKey === 'teams' && <TeamsScreen reloadKey={reloadKey} onChanged={refreshLists} />}
+        {activeKey === 'teams' && (
+          <TeamsScreen reloadKey={reloadKey} isAdmin={user.isAdmin} onChanged={refreshLists} />
+        )}
         {activeKey === 'feed' && (
           <FeedScreen key={reloadKey} reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
-        {activeKey === 'association' && (
-          <TabPlaceholder title="Dernek" text="Bu ekranın içeriği sonraki aşamalarda eklenecek." />
-        )}
+        {activeKey === 'association' && <AssociationScreen />}
         {activeTeam && (
-          <TabPlaceholder
-            title={activeTeam.name}
-            text={activeTeam.role_title ? `Rolünüz: ${activeTeam.role_title}` : 'Ekip içeriği sonraki aşamalarda eklenecek.'}
+          <TeamWorkspace
+            key={activeTeam.id}
+            team={activeTeam}
+            reloadKey={reloadKey}
+            onOpenTask={(id) => setOpenTask(id)}
           />
         )}
       </main>
@@ -137,6 +141,7 @@ export function AppShell({ user, onSignedOut }: Props) {
           key={openTask}
           taskId={openTask}
           currentUserId={user.id}
+          isAdmin={user.isAdmin}
           onClose={() => setOpenTask(null)}
           onChanged={refreshLists}
         />
@@ -153,14 +158,5 @@ export function AppShell({ user, onSignedOut }: Props) {
         />
       )}
     </div>
-  );
-}
-
-function TabPlaceholder({ title, text }: { title: string; text: string }) {
-  return (
-    <section className="rounded-xl border border-dashed border-slate-300 bg-white p-6">
-      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-slate-600">{text}</p>
-    </section>
   );
 }
