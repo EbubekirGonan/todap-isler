@@ -1,6 +1,5 @@
 import type pg from "pg";
 import { query } from "../db.js";
-import { feedTaskVisibleSql } from "../policy/visibility.js";
 
 export type ActivityInput = {
   userId: string;
@@ -57,32 +56,31 @@ type FeedRow = {
   created_at: Date;
 };
 
-// Görev hareketleri task_history'den, diğerleri activity_log'dan okunur. Ekibe özel görevler yalnızca üyelerine görünür.
-export async function listFeed(userId: string, limit: number, before: string | null): Promise<FeedEntry[]> {
+// Görev hareketleri task_history'den, diğerleri activity_log'dan okunur. Akış herkese açıktır.
+export async function listFeed(before: string | null, limit: number): Promise<FeedEntry[]> {
   const result = await query<FeedRow>(
     `WITH feed AS (
        SELECT 'task'::text AS kind, h.task_id AS entity_id, t.title AS entity_name, NULL::text AS action,
-              h.field, h.old_value, h.new_value, h.user_id, h.created_at, t.team_only, t.team_id
+              h.field, h.old_value, h.new_value, h.user_id, h.created_at
          FROM task_history h
          JOIN tasks t ON t.id = h.task_id
        UNION ALL
        SELECT a.entity_type, a.entity_id, a.entity_name, a.action,
-              a.field, a.old_value, a.new_value, a.user_id, a.created_at, false, NULL::bigint
+              a.field, a.old_value, a.new_value, a.user_id, a.created_at
          FROM activity_log a
      )
      SELECT f.kind, f.entity_id, f.entity_name, f.action, f.field, f.old_value, f.new_value,
             f.user_id, u.name AS user_name, f.created_at
        FROM (
          SELECT f0.kind, f0.entity_id, f0.entity_name, f0.action, f0.field, f0.old_value, f0.new_value,
-                f0.user_id, f0.team_only, f0.team_id, date_trunc('milliseconds', f0.created_at) AS created_at
+                f0.user_id, date_trunc('milliseconds', f0.created_at) AS created_at
            FROM feed f0
        ) f -- JSON ve imleç milisaniye hassasiyetinde, karşılaştırma da öyle olmalı
        JOIN users u ON u.id = f.user_id
-      WHERE ($2::timestamptz IS NULL OR f.created_at <= $2)
-        AND (f.kind <> 'task' OR ${feedTaskVisibleSql("$1", "f")})
+      WHERE ($1::timestamptz IS NULL OR f.created_at <= $1)
       ORDER BY f.created_at DESC, f.kind, f.entity_id DESC
-      LIMIT $3`,
-    [userId, before, limit],
+      LIMIT $2`,
+    [before, limit],
   );
 
   return result.rows.map((row) => ({

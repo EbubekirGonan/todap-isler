@@ -573,7 +573,7 @@ describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
     assert.equal(relinked.teams.length, 2);
   });
 
-  test("akış ekibe özel görev başlığını yalnızca üyelere gösterir ve sayfalanır", async () => {
+  test("akış ekibe özel görev başlığını herkese gösterir ve sayfalanır", async () => {
     const hale = await createUser("Hale");
     const ferhat = await createUser("Ferhat");
     const outsider = await createUser("Kerem");
@@ -581,14 +581,14 @@ describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
     await setRequired(team, 2);
     await api("POST", `/api/teams/${team}/join`, hale);
 
-    const secretTitle = "Gizli ekip görevi";
-    await createTask(hale, { title: secretTitle, teamId: team, teamOnly: true });
+    const teamTitle = "Ekip görevi";
+    await createTask(hale, { title: teamTitle, teamId: team, teamOnly: true });
 
     const memberFeed = ((await (await api("GET", "/api/feed?limit=100", hale)).json()) as { entries: { entityName: string }[] }).entries;
-    assert.ok(memberFeed.some((e) => e.entityName === secretTitle));
+    assert.ok(memberFeed.some((e) => e.entityName === teamTitle));
 
     const outsiderFeed = ((await (await api("GET", "/api/feed?limit=100", outsider)).json()) as { entries: { entityName: string }[] }).entries;
-    assert.ok(!outsiderFeed.some((e) => e.entityName === secretTitle));
+    assert.ok(outsiderFeed.some((e) => e.entityName === teamTitle));
 
     type FeedItem = { createdAt: string };
     const feedOf = async (path: string) => ((await (await api("GET", path, ferhat)).json()) as { entries: FeedItem[] }).entries;

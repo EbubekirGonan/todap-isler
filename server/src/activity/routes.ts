@@ -25,6 +25,6 @@ feedRouter.get("/", async (req, res) => {
     before = new Date(req.query.before).toISOString();
   }
 
-  const entries = await listFeed(req.user!.id, rawLimit, before);
+  const entries = await listFeed(before, rawLimit);
   res.json({ entries });
 });
