@@ -38,7 +38,7 @@ Herkes için:
 2. Havuz: Katkı sağlayan kişi sayısı tahmini gerekli kişi sayısından az olan işler. Satırda iki eylem: "Katkı sağlarım" (işe katkı veren kişi olurum) ve "Destek atabilirim" (yedek olarak görünürüm). Satırda proje etiketi ve varsa üst iş de görünür. "Bana özel" filtresi küçük bir çip: aktifken renkli, pasifken gri. Aktifken yalnızca kişinin üyesi olduğu ekiplerin ekibe özel görevleri görünür; pasifken ekibe özel görevler hiç görünmez.
 3. Faaliyetler (veri modelindeki projects tablosu): Büyük çaplı işler. Bir faaliyet birden fazla ekibe bağlanabilir (project_teams, bağlantılar ended_at ile kapanır). Kartta: ad, ekipler, ilerleme çubuğu ve yüzde, "N görevde kişi aranıyor". Karta dokununca faaliyetin görevleri listelenir. "Faaliyet ekle" butonu: ad zorunlu; açıklama, ekip, başlangıç ve bitiş tarihi isteğe bağlı. Faaliyet oluşturmak herkese açıktır.
 4. Tüm İşler: Sahibi kim olursa olsun tüm görevler tek liste (ekibe özel olanlar dahil; başlık ve durum herkese görünür). Varsayılan olarak yalnızca açık işler gösterilir; "Açık" çipi kapatılınca tamamlananlar da listelenir. Sıralama termin tarihine göre eskiden yeniye (en gecikmiş en üstte), terminsizler en altta. "Son değişiklik" çipi açıkken son hareketi en yeni olan iş en üstte gelir. "Gecikti" çipi yalnızca tamamlanmamış ve termini bugünden (Europe/Istanbul) önce olan işleri gösterir; termini bugün olan iş gecikmiş sayılmaz. Çipler birlikte kullanılabilir.
-5. Dernek: Herkese açık genel sekme. Tüm ekip ve kurulları tanıtır (ad, tür: dönemli/süresiz, dönem veya "şu tarihten beri", üyeler). Bir ekibe dokununca üyeleri ve tanıtımı açılır.
+5. Dernek: Herkese açık genel sekme. Yönetici tarafından doldurulan kutucuklardan oluşur (başlık, açıklama). Yönetici sağ altta + ile kutucuk ekler, ⋮ menüsünden düzenler. Kutucuklara kişi eklenmez. Kutucuklar eklenme sırasıyla listelenir. Ekipler bu sekmede değil, Ekipler sekmesinde listelenir.
 
 6. Ekipler: Tüm ekiplerin listesi. Her ekipte kadro durumu ("x/y kişi · n açık yer" veya "Kadro dolu") ve o ekibin üstlendiği faaliyetler görünür. Bir kişi bir ekibe aynı anda bir kez girer; ayrıldıktan sonra tekrar katılabilir. Katılım yalnızca açık yer varsa mümkündür (gerekli kişi sayısı − aktif üye sayısı > 0). Gerekli kişi sayısı sonradan düzenlenebilir.
 7. Akış: Uygulamada yapılan hareketlerin günlüğü (herkese açık). Kim ne yaptı, neyi ekledi, değiştirdi, kimi ekipten çıkardı gibi kayıtlar en yeniden eskiye listelenir; "Daha fazla" ile eski kayıtlar açılır. Ekibe özel görevlerin başlığı herkese gösterilir (bkz. Kararlar 1).
@@ -71,6 +71,8 @@ team_members(id, team_id, user_id, role_title, started_at, ended_at)
 projects(id, name, description, status, start_date, due_date, created_by, created_at)
 
 project_teams(id, project_id, team_id, started_at, ended_at NULL)
+association_tiles(id, title, description NULL, created_by, created_at, updated_at, deleted_at NULL)
+association_tile_members(id, tile_id, user_id, started_at, ended_at NULL) -- kullanılmıyor; kişi ekleme kaldırıldı, tablo ileride silinebilir
   - Bir faaliyet birden fazla ekibe, bir ekip birden fazla faaliyete bağlanabilir. ended_at boşsa bağlantı açıktır.
 
 tasks(id, project_id NULL, team_id NULL, parent_task_id NULL, title, description,
@@ -125,6 +127,12 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 2. Magic link için e-posta gönderim servisi (Aşama 2'de seçilecek). Geliştirme sırasında bağlantı konsola yazdırılır.
 ## MVP kapsamı
 Dahil: users + e-posta ile şifresiz giriş (magic link), teams, team_members, projects, tasks, task_assignments (üstlenme ve atama), comments, task_history; yukarıdaki sekmeler ve ekranlar.
+Ekip mesajları (team_messages): Her ekip sayfasında ekip içi ortak sohbet (ortak WhatsApp grubu gibi). Kurallar:
+- Yalnızca o ekibin aktif üyeleri okuyabilir ve yazabilir. Yönetici (admin) her ekibin mesajlarını okuyabilir.
+- Mesajlar Akış'a, Dernek'e veya başka bir yere yansımaz.
+- Mesaj yazan kişi kendi mesajını düzenleyebilir ve silebilir (yumuşak silme, deleted_at). Düzenlenen mesaj "düzenlendi" olarak işaretlenir.
+- Yenileme: Sayfa açıkken 30 sn'de bir otomatik yenileme yapılmaz. Sayfada yenile düğmesi bulunur; sekme tekrar öne geldiğinde de liste yenilenir.
+- Yetki kuralı tek bir modülde (policy/visibility) toplanır.
 Şimdilik dışında (sonraya bırak, şemayı bunlara engel olmayacak şekilde tut): workflow motoru, görev bağımlılıkları, bildirimler, tekrarlayan görevler, "sürekli sorumluluklar" (responsibilities tabloları), onay akışları, zaman takibi, raporlama panoları, kanban görünümü.
 
 ## İlk adım olarak senden istediklerim

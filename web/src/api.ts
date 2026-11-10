@@ -336,26 +336,29 @@ export async function listAllTasks(filters: TaskListFilters): Promise<Task[]> {
   return data.tasks;
 }
 
-export type AssociationMember = {
-  userId: string;
-  name: string;
-  roleTitle: string | null;
-};
-
-// Dernek sekmesi: herkese açık ekip listesi, dönem bilgisi ve aktif üyeler.
-export type AssociationTeam = {
+// Dernek kutucuğu: yönetici tanımlar; ekiplerden bağımsız bir başlık ve açıklama taşır.
+export type AssociationTile = {
   id: string;
-  name: string;
+  title: string;
   description: string | null;
-  type: 'term' | 'ongoing';
-  termStart: string | null;
-  termEnd: string | null;
-  members: AssociationMember[];
 };
 
-export async function listAssociationTeams(): Promise<AssociationTeam[]> {
-  const data = await request<{ teams: AssociationTeam[] }>('/api/association/teams');
-  return data.teams;
+export type AssociationTileInput = {
+  title: string;
+  description: string | null;
+};
+
+export async function listAssociationTiles(): Promise<AssociationTile[]> {
+  const data = await request<{ tiles: AssociationTile[] }>('/api/association/tiles');
+  return data.tiles;
+}
+
+export function createAssociationTile(input: AssociationTileInput): Promise<void> {
+  return request('/api/association/tiles', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateAssociationTile(tileId: string, input: AssociationTileInput): Promise<void> {
+  return request(`/api/association/tiles/${tileId}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
 
 // Ekip görevleri yalnızca üyelere açıktır; üye olmayan istekte sunucu 403 döner.

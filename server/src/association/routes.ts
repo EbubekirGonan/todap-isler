@@ -1,46 +1,50 @@
 import { Router } from "express";
 import { requireAuth } from "../auth/session.js";
 import { query } from "../db.js";
+import { HttpError } from "../http-error.js";
+import { requireAdmin } from "../policy/visibility.js";
+import { asObject, parseId, parseOptionalText, parseRequiredText } from "../validation.js";
 
 export const associationRouter = Router();
 
 associationRouter.use(requireAuth);
 
-// Dernek sekmesi herkese açıktır: tüm ekipler, türleri, dönem bilgisi ve aktif üyeler.
-associationRouter.get("/teams", async (_req, res) => {
-  const teams = await query<{
-    id: string;
-    name: string;
-    description: string | null;
-    type: string;
-    term_start: string | null;
-    term_end: string | null;
-  }>("SELECT id, name, description, type, term_start, term_end FROM teams ORDER BY name, id");
-
-  const members = await query<{ team_id: string; user_id: string; name: string; role_title: string | null }>(
-    `SELECT m.team_id, m.user_id, u.name, m.role_title
-       FROM team_members m
-       JOIN users u ON u.id = m.user_id
-      WHERE m.ended_at IS NULL
-      ORDER BY u.name, m.user_id`,
+// Dernek kutucukları herkese açıktır. Ekip listesi Ekipler sekmesinde gösterilir.
+// Kutucuklar eklenme sırasına göre listelenir.
+associationRouter.get("/tiles", async (_req, res) => {
+  const tiles = await query<{ id: string; title: string; description: string | null }>(
+    "SELECT id, title, description FROM association_tiles WHERE deleted_at IS NULL ORDER BY id",
   );
-
-  const membersByTeam = new Map<string, { userId: string; name: string; roleTitle: string | null }[]>();
-  for (const member of members.rows) {
-    const list = membersByTeam.get(member.team_id) ?? [];
-    list.push({ userId: member.user_id, name: member.name, roleTitle: member.role_title });
-    membersByTeam.set(member.team_id, list);
-  }
-
-  res.json({
-    teams: teams.rows.map((team) => ({
-      id: team.id,
-      name: team.name,
-      description: team.description,
-      type: team.type,
-      termStart: team.term_start,
-      termEnd: team.term_end,
-      members: membersByTeam.get(team.id) ?? [],
-    })),
-  });
+  res.json({ tiles: tiles.rows });
 });
+
+// Yalnızca yönetici: yeni kutucuk ekler.
+associationRouter.post("/tiles", requireAdmin, async (req, res) => {
+  const body = asObject(req.body);
+  const title = parseRequiredText(body.title, "Kutucuk başlığı", 100);
+  const description = parseOptionalText(body.description, "Açıklama", 2000);
+  const result = await query<{ id: string }>(
+    "INSERT INTO association_tiles (title, description, created_by) VALUES ($1, $2, $3) RETURNING id",
+    [title, description, req.user!.id],
+  );
+  res.status(201).json({ id: result.rows[0].id });
+});
+
+// Yalnızca yönetici: kutucuğun başlığını ve açıklamasını günceller.
+associationRouter.patch("/tiles/:id", requireAdmin, async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz kutucuk kimliği.");
+  const body = asObject(req.body);
+  const title = parseRequiredText(body.title, "Kutucuk başlığı", 100);
+  const description = parseOptionalText(body.description, "Açıklama", 2000);
+  const result = await query(
+    `UPDATE association_tiles
+        SET title = $2, description = $3, updated_at = now()
+      WHERE id = $1 AND deleted_at IS NULL`,
+    [id, title, description],
+  );
+  if (result.rowCount !== 1) {
+    throw new HttpError(404, "Kutucuk bulunamadı.");
+  }
+  res.status(204).end();
+});
+

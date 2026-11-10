@@ -115,7 +115,7 @@ export function AppShell({ user, onSignedOut }: Props) {
         {activeKey === 'feed' && (
           <FeedScreen key={reloadKey} reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
-        {activeKey === 'association' && <AssociationScreen />}
+        {activeKey === 'association' && <AssociationScreen isAdmin={user.isAdmin} />}
         {activeTeam && (
           <TeamWorkspace
             key={activeTeam.id}
