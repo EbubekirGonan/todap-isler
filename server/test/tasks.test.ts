@@ -573,6 +573,30 @@ describe("takımlar, faaliyet-takım bağlantıları ve akış", () => {
     assert.equal(relinked.teams.length, 2);
   });
 
+  test("faaliyet adı ve açıklaması güncellenir; yalnızca değişen alanlar akışa düşer", async () => {
+    const gizem = await createUser("Güncelleyen");
+    const created = await api("POST", "/api/projects", gizem, { name: "Eski Ad", description: "Eski açıklama" });
+    const projectId = ((await created.json()) as { id: string }).id;
+
+    assert.equal((await api("PATCH", `/api/projects/${projectId}`, gizem, { name: "" })).status, 400);
+    assert.equal((await api("PATCH", `/api/projects/999999`, gizem, { name: "Yeni" })).status, 404);
+
+    const renamed = await api("PATCH", `/api/projects/${projectId}`, gizem, { name: "Yeni Ad", description: "Eski açıklama" });
+    assert.equal(renamed.status, 204);
+    const detail = ((await (await api("GET", `/api/projects/${projectId}`, gizem)).json()) as { project: { name: string; description: string | null } }).project;
+    assert.equal(detail.name, "Yeni Ad");
+    assert.equal(detail.description, "Eski açıklama");
+
+    assert.equal((await api("PATCH", `/api/projects/${projectId}`, gizem, { name: "Yeni Ad", description: null })).status, 204);
+    const cleared = ((await (await api("GET", `/api/projects/${projectId}`, gizem)).json()) as { project: { description: string | null } }).project;
+    assert.equal(cleared.description, null);
+
+    const feed = ((await (await api("GET", "/api/feed?limit=100", gizem)).json()) as { entries: { kind: string; action: string | null; entityName: string }[] }).entries;
+    const mine = feed.filter((e) => e.kind === "project" && e.entityName === "Yeni Ad").map((e) => e.action);
+    assert.ok(mine.includes("renamed"));
+    assert.equal(mine.filter((action) => action === "described").length, 1);
+  });
+
   test("akış ekibe özel görev başlığını herkese gösterir ve sayfalanır", async () => {
     const hale = await createUser("Hale");
     const ferhat = await createUser("Ferhat");

@@ -4,6 +4,7 @@ import {
   listProjects,
   listProjectTasks,
   unlinkProjectTeam,
+  updateProject,
   type Project,
   type Team,
 } from '../api';
@@ -180,6 +181,93 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
   );
 }
 
+function LinkedTeams({ teams }: { teams: Project['teams'] }) {
+  return (
+    <div className="mt-4 border-t border-slate-200 pt-3">
+      <h3 className="text-sm font-medium text-slate-800">Bağlı ekipler</h3>
+      {teams.length === 0 && <p className="mt-1 text-xs text-slate-600">Henüz bağlı ekip yok.</p>}
+      {teams.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {teams.map((team) => (
+            <li key={team.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-800">
+              {team.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ProjectEditForm({
+  project,
+  teams,
+  onChanged,
+  onClose,
+}: {
+  project: Project;
+  teams: Team[];
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateProject(project.id, { name: name.trim(), description: description.trim() || null });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kaydedilemedi. Tekrar deneyin.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm">
+        <span className="font-medium text-slate-800">Faaliyet adı</span>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={200}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="font-medium text-slate-800">Açıklama</span>
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          maxLength={5000}
+          rows={3}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy || !name.trim()}
+          onClick={save}
+          className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Kaydet
+        </button>
+        <button type="button" onClick={onClose} className="rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
+          Kapat
+        </button>
+      </div>
+      {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+      <ProjectTeams project={project} teams={teams} onChanged={onChanged} />
+    </div>
+  );
+}
+
 function ProjectDetail({
   projectId,
   project,
@@ -197,6 +285,8 @@ function ProjectDetail({
   onOpenTask: (taskId: string) => void;
   onChanged: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const { data, error, loading } = useLoad(
     () => listProjectTasks(projectId),
     `project-tasks:${projectId}:${reloadKey}`,
@@ -210,13 +300,52 @@ function ProjectDetail({
 
       {project && (
         <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">{project.name}</h2>
-          {project.description && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{project.description}</p>}
-          <p className="mt-2 text-xs text-slate-600">
-            {project.progress.done}/{project.progress.total} tamamlandı
-            {project.progress.openCount > 0 && ` · ${project.progress.openCount} görevde kişi aranıyor`}
-          </p>
-          <ProjectTeams project={project} teams={teams} onChanged={onChanged} />
+          <div className="flex items-start justify-between gap-2">
+            {!editing && <h2 className="text-lg font-semibold text-slate-900">{project.name}</h2>}
+            {editing && <span className="text-sm font-medium text-slate-700">Faaliyeti düzenle</span>}
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Faaliyet işlemleri"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+                className="rounded-md px-2 py-1 text-lg leading-none text-slate-600 hover:bg-slate-100"
+              >
+                ⋮
+              </button>
+              {menuOpen && (
+                <div role="menu" className="absolute right-0 z-10 mt-1 w-32 rounded-md bg-white py-1 shadow-lg ring-1 ring-slate-200">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setEditing(true);
+                    }}
+                    className="block w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100"
+                  >
+                    Düzenle
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {editing ? (
+            <div className="mt-3">
+              <ProjectEditForm project={project} teams={teams} onChanged={onChanged} onClose={() => setEditing(false)} />
+            </div>
+          ) : (
+            <>
+              {project.description && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{project.description}</p>}
+              <p className="mt-2 text-xs text-slate-600">
+                {project.progress.done}/{project.progress.total} tamamlandı
+                {project.progress.openCount > 0 && ` · ${project.progress.openCount} görevde kişi aranıyor`}
+              </p>
+              <LinkedTeams teams={project.teams} />
+            </>
+          )}
         </section>
       )}
 

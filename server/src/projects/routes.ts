@@ -153,6 +153,48 @@ projectsRouter.post("/", async (req, res) => {
   res.status(201).json({ id });
 });
 
+// Yalnızca gerçekten değişen alanlar akışa yazılır.
+projectsRouter.patch("/:id", async (req, res) => {
+  const id = parseId(req.params.id, "Geçersiz proje kimliği.");
+  const body = asObject(req.body);
+  const name = parseRequiredText(body.name, "Proje adı", 200);
+  const description = parseOptionalText(body.description, "Açıklama", 5000);
+
+  await withTransaction(async (client) => {
+    const current = await client.query<{ name: string; description: string | null }>(
+      "SELECT name, description FROM projects WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    if (!current.rowCount) {
+      throw new HttpError(404, "Proje bulunamadı.");
+    }
+    const before = current.rows[0];
+    await client.query("UPDATE projects SET name = $2, description = $3 WHERE id = $1", [id, name, description]);
+
+    if (before.name !== name) {
+      await recordActivity(client, {
+        userId: req.user!.id,
+        action: "renamed",
+        entityType: "project",
+        entityId: id,
+        entityName: name,
+        oldValue: before.name,
+        newValue: name,
+      });
+    }
+    if ((before.description ?? null) !== description) {
+      await recordActivity(client, {
+        userId: req.user!.id,
+        action: "described",
+        entityType: "project",
+        entityId: id,
+        entityName: name,
+      });
+    }
+  });
+  res.status(204).end();
+});
+
 // Faaliyeti ekibe bağlar. Aynı ekip aynı anda bir kez bağlı olabilir; bağlantı kaldırıldıktan sonra yeniden kurulabilir.
 projectsRouter.post("/:id/teams", async (req, res) => {
   const id = parseId(req.params.id, "Geçersiz proje kimliği.");

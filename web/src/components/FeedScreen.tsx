@@ -13,6 +13,8 @@ const PAGE_SIZE = 50;
 
 const PROJECT_ACTION_LABELS: Record<string, string> = {
   created: 'Faaliyet oluşturdu',
+  renamed: 'Faaliyetin adını değiştirdi',
+  described: 'Faaliyetin açıklamasını değiştirdi',
   linked_team: 'Faaliyeti ekibe bağladı',
   unlinked_team: 'Faaliyetin ekip bağlantısını kaldırdı',
 };

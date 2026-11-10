@@ -349,6 +349,10 @@ export function createProject(input: NewProject): Promise<{ id: string }> {
   return request('/api/projects', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateProject(projectId: string, input: { name: string; description: string | null }): Promise<void> {
+  return request(`/api/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 export function linkProjectTeam(projectId: string, teamId: string): Promise<void> {
   return request(`/api/projects/${projectId}/teams`, { method: 'POST', body: JSON.stringify({ teamId }) });
 }
