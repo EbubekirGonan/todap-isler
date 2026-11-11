@@ -6,10 +6,37 @@ export type LoginMail = {
   code: string;
 };
 
-// Geliştirmede e-posta yerine konsola yazar. Canlı sağlayıcı Faz 8'de seçilecek.
 export async function sendLoginMail(mail: LoginMail): Promise<void> {
   if (config.isProduction) {
-    throw new Error("Canlı e-posta sağlayıcısı henüz yapılandırılmadı.");
+    if (!config.resendApiKey || !config.emailFrom) {
+      throw new Error("Resend yapılandırması eksik.");
+    }
+
+    let response: Response;
+    try {
+      response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: config.emailFrom,
+          to: [mail.to],
+          subject: "Todap giriş bağlantısı",
+          text: `Todap'a giriş yapmak için bağlantıyı açın:\n\n${mail.link}\n\n` +
+            `Veya şu 6 haneli kodu kullanın: ${mail.code}\n\n` +
+            "Bağlantı ve kod 15 dakika geçerlidir. Giriş isteğini siz yapmadıysanız bu e-postayı dikkate almayın.",
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      throw new Error("Resend'e bağlanılamadı.");
+    }
+    if (!response.ok) {
+      throw new Error(`Resend e-posta isteğini reddetti (HTTP ${response.status}).`);
+    }
+    return;
   }
 
   console.log(

@@ -128,7 +128,7 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 
 ## Hâlâ açık
 1. Dönem bitince üyelikler otomatik kapanır mı, yoksa "yenile" önerisi mi çıkar?
-2. Magic link için e-posta gönderim servisi (Aşama 2'de seçilecek). Geliştirme sırasında bağlantı konsola yazdırılır.
+2. Canlı Resend yapılandırmasının ve gerçek e-posta teslimatının doğrulanması. Geliştirme sırasında bağlantı konsola yazdırılır.
 ## MVP kapsamı
 Dahil: users + e-posta ile şifresiz giriş (magic link), teams, team_members, projects, tasks, task_assignments (üstlenme ve atama), comments, task_history; yukarıdaki sekmeler ve ekranlar.
 Ekip mesajları (team_messages): Her ekip sayfasında ekip içi ortak sohbet (ortak WhatsApp grubu gibi). Kurallar:

@@ -26,6 +26,7 @@ const { createApp } = await import("../src/app.js");
 const { pool, query } = await import("../src/db.js");
 const { createSession } = await import("../src/auth/session.js");
 const { createLinkToken, hashSecret } = await import("../src/auth/tokens.js");
+const { config } = await import("../src/config.js");
 
 let server: Server;
 let baseUrl: string;
@@ -97,6 +98,34 @@ async function requestAndCaptureMail(email: string) {
 }
 
 describe("giriş isteği", () => {
+  test("canlı e-posta hatası kayıtsız adresle aynı yanıtı verir ve hata günlüğüne yazılır", async () => {
+    await createUser("resend-error@example.com");
+    const original = { isProduction: config.isProduction, resendApiKey: config.resendApiKey, emailFrom: config.emailFrom };
+    const realFetch = globalThis.fetch;
+    const fetchMock = mock.method(globalThis, "fetch", async (...args: Parameters<typeof fetch>) => {
+      if (args[0] === "https://api.resend.com/emails") return new Response("gizli içerik", { status: 503 });
+      return realFetch(...args);
+    });
+    const errorLog = mock.method(console, "error", () => {});
+    try {
+      config.isProduction = true;
+      config.resendApiKey = "test-api-key";
+      config.emailFrom = "giris@auth.example.com";
+      const known = await post("/api/auth/request", { email: "resend-error@example.com" });
+      const unknown = await post("/api/auth/request", { email: "unknown-resend@example.com" });
+      assert.equal(known.status, 202);
+      assert.equal(unknown.status, 202);
+      assert.deepEqual(await known.json(), await unknown.json());
+      assert.equal(errorLog.mock.callCount(), 1);
+      assert.match(String(errorLog.mock.calls[0].arguments[1]), /503/);
+      assert.ok(!String(errorLog.mock.calls[0].arguments[1]).includes("gizli içerik"));
+    } finally {
+      Object.assign(config, original);
+      fetchMock.mock.restore();
+      errorLog.mock.restore();
+    }
+  });
+
   test("geçersiz e-posta 400 döner", async () => {
     const res = await post("/api/auth/request", { email: "bozuk-eposta" });
     assert.equal(res.status, 400);
