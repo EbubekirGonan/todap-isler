@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import express, { type ErrorRequestHandler } from "express";
 import { feedRouter } from "./activity/routes.js";
 import { associationRouter } from "./association/routes.js";
@@ -24,7 +26,7 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   res.status(500).json({ error: "Beklenmeyen bir hata oluştu." });
 };
 
-export function createApp() {
+export function createApp(options: { webDir?: string } = {}) {
   const app = express();
 
   app.use(express.json());
@@ -45,6 +47,29 @@ export function createApp() {
   app.use("/api/users", usersRouter);
   app.use("/api/feed", feedRouter);
   app.use("/api/association", associationRouter);
+
+  if (options.webDir) {
+    const webDir = resolve(options.webDir);
+    const indexPath = resolve(webDir, "index.html");
+    if (!existsSync(indexPath)) {
+      throw new Error(`Arayüz derlemesi bulunamadı: ${indexPath}`);
+    }
+
+    app.use("/api", (_req, res) => {
+      res.status(404).json({ error: "API adresi bulunamadı." });
+    });
+    app.use(express.static(webDir, {
+      setHeaders(res, path) {
+        if (path === indexPath || path === resolve(webDir, "sw.js")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }));
+    app.get("/giris", (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(indexPath);
+    });
+  }
 
   app.use(errorHandler);
 

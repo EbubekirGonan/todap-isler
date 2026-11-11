@@ -32,7 +32,7 @@ export default defineConfig({
       },
       workbox: {
         // API istekleri uygulama kabuğu yedeğine düşmez.
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api(?:\/|\?|$)/],
       },
     }),
   ],
