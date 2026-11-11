@@ -6,6 +6,7 @@ import { associationRouter } from "./association/routes.js";
 import { authRouter } from "./auth/routes.js";
 import { query } from "./db.js";
 import { HttpError } from "./http-error.js";
+import { feedbackRouter } from "./feedback/routes.js";
 import { projectsRouter } from "./projects/routes.js";
 import { tasksRouter } from "./tasks/routes.js";
 import { teamsRouter } from "./teams/routes.js";
@@ -47,6 +48,7 @@ export function createApp(options: { webDir?: string } = {}) {
   app.use("/api/users", usersRouter);
   app.use("/api/feed", feedRouter);
   app.use("/api/association", associationRouter);
+  app.use("/api/feedback", feedbackRouter);
 
   if (options.webDir) {
     const webDir = resolve(options.webDir);

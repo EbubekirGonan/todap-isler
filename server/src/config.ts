@@ -54,6 +54,11 @@ if (isProduction) {
   }
 }
 
+if (process.env.FEEDBACK_EMAIL?.trim() && !normalizeEmail(process.env.FEEDBACK_EMAIL)) {
+  console.error("FEEDBACK_EMAIL geçerli bir e-posta adresi olmalıdır.");
+  process.exit(1);
+}
+
 export const config = {
   databaseUrl: process.env.DATABASE_URL as string,
   port,
@@ -62,4 +67,5 @@ export const config = {
   isProduction,
   resendApiKey: process.env.RESEND_API_KEY?.trim(),
   emailFrom: process.env.EMAIL_FROM?.trim(),
+  feedbackEmail: normalizeEmail(process.env.FEEDBACK_EMAIL),
 };

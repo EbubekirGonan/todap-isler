@@ -4,6 +4,7 @@ import { AllTasksScreen } from './AllTasksScreen';
 import { AdminScreen } from './AdminScreen';
 import { AssociationScreen } from './AssociationScreen';
 import { FeedScreen } from './FeedScreen';
+import { FeedbackScreen } from './FeedbackScreen';
 import { MyTasksScreen } from './MyTasksScreen';
 import { PoolScreen } from './PoolScreen';
 import { ProjectsScreen } from './ProjectsScreen';
@@ -72,7 +73,7 @@ export function AppShell({ user, onSignedOut }: Props) {
 
   const tabTeams = user.isAdmin ? allTeams : teams;
   const teamTabs: TabItem[] = (tabTeams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
-  const tabs = [...FIXED_TABS, ...(user.isAdmin ? [{ key: 'admin', label: 'Yönetim' }] : []), ...teamTabs];
+  const tabs = [...FIXED_TABS, ...(user.isAdmin ? [{ key: 'admin', label: 'Yönetim' }] : []), ...teamTabs, { key: 'feedback', label: 'Geri bildirim' }];
   const activeTeam = tabTeams?.find((team) => `team:${team.id}` === activeKey) ?? null;
   const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
 
@@ -138,6 +139,7 @@ export function AppShell({ user, onSignedOut }: Props) {
         )}
         {activeKey === 'association' && <AssociationScreen isAdmin={user.isAdmin} />}
         {activeKey === 'admin' && user.isAdmin && <AdminScreen />}
+        {activeKey === 'feedback' && <FeedbackScreen />}
         {activeTeam && (
           <TeamWorkspace
             key={activeTeam.id}

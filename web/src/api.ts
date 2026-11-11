@@ -87,6 +87,10 @@ export function logout(): Promise<void> {
   return request('/api/auth/logout', { method: 'POST' });
 }
 
+export function sendFeedback(message: string): Promise<{ message: string }> {
+  return request('/api/feedback', { method: 'POST', body: JSON.stringify({ message }) });
+}
+
 export async function getMyTeams(): Promise<Team[]> {
   const data = await request<{ teams: Team[] }>('/api/teams/mine');
   return data.teams;

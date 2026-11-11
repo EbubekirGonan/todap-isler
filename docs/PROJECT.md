@@ -131,6 +131,7 @@ Uygun indeksler ekle: tasks(status, due_date), tasks(project_id), task_assignmen
 2. Canlı Resend yapılandırmasının ve gerçek e-posta teslimatının doğrulanması. Geliştirme sırasında bağlantı konsola yazdırılır.
 ## MVP kapsamı
 Dahil: users + e-posta ile şifresiz giriş (magic link), teams, team_members, projects, tasks, task_assignments (üstlenme ve atama), comments, task_history; yukarıdaki sekmeler ve ekranlar.
+Geri bildirim: Giriş yapmış herkesin görebildiği son sekmeden yazılan mesaj, kullanıcının adı ve e-posta adresiyle yapılandırılmış alıcıya e-posta olarak gönderilir. Mesajlar uygulama veritabanında ayrıca saklanmaz.
 Ekip mesajları (team_messages): Her ekip sayfasında ekip içi ortak sohbet (ortak WhatsApp grubu gibi). Kurallar:
 - Yalnızca o ekibin aktif üyeleri okuyabilir ve yazabilir. Yönetici (admin) her ekibin mesajlarını okuyabilir.
 - Mesajlar Akış'a, Dernek'e veya başka bir yere yansımaz.

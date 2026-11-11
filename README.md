@@ -12,6 +12,10 @@ Arayüz (PWA) geliştirme adımları için [web/README.md](web/README.md) dosyas
 
 Canlıya geçmeden önce ayrı test ortamında giriş bağlantısını, kodu ve e-posta teslimatını doğrulayın. Gönderim hataları sunucu günlüğüne yazılır; giriş isteğinin yanıtı e-posta adresinin kayıtlı olup olmadığını açıklamaz.
 
+## Geri bildirim
+
+Giriş yapmış kullanıcıların geri bildirim göndermesi için `FEEDBACK_EMAIL` alıcı adresini ve Resend için `EMAIL_FROM` ile `RESEND_API_KEY` değişkenlerini tanımlayın. Eksik ayarlarda uygulama çalışmaya devam eder, ancak geri bildirim gönderimi açık bir hata döndürür. Geri bildirimler veritabanında saklanmaz. Kullanıcı başına 15 dakikada en fazla 5 gönderim denemesi kabul edilir; sınır her sunucu sürecinde bellekte tutulur ve yeniden başlatmada sıfırlanır. Geliştirmede de yapılandırılmışsa Resend üzerinden gerçek e-posta gönderilir; testlerde sahte gönderim kullanın.
+
 ## Tek servisli yayın
 
 Render'da mevcut sitenin servisinden ayrı bir Node web servisi kullanın. Depo kökünden çalışacak şekilde Root Directory alanını boş bırakın ve `master` dalını seçin:
