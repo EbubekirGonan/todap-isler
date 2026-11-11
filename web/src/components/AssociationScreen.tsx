@@ -48,7 +48,7 @@ export function AssociationScreen({ isAdmin }: Props) {
           aria-label="Kutucuk ekle"
           title="Kutucuk ekle"
           onClick={() => setCreating(true)}
-          className="fixed bottom-6 right-6 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-3xl leading-none text-white shadow-lg hover:bg-teal-800"
+          className="fixed bottom-6 right-[max(1.5rem,calc((100vw-48rem)/2+1.5rem))] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-3xl leading-none text-white shadow-lg hover:bg-teal-800"
         >
           +
         </button>

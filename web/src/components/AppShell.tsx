@@ -152,7 +152,7 @@ export function AppShell({ user, onSignedOut }: Props) {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="fixed right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] rounded-full bg-teal-700 px-5 py-3 font-semibold text-white shadow-lg"
+          className="fixed right-[max(1rem,calc((100vw-48rem)/2+1rem))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] rounded-full bg-teal-700 px-5 py-3 font-semibold text-white shadow-lg"
         >
           + İş ekle
         </button>

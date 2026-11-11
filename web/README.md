@@ -14,6 +14,10 @@ npm run dev        # http://localhost:5173
 
 Farklı bir API adresi için `API_PROXY_TARGET` ortam değişkenini kullanın.
 
+PWA simgeleri `public/logo-*.png` dosyalarından ve manifest ayarlarından sunulur. Yüklü uygulamanın simgesinin güncellenmesi tarayıcıya bağlı olarak gecikebilir; gerekirse uygulamayı kaldırıp yeniden yükleyin.
+
+Sekmeler dokunmatik ekranda kaydırılabilir; masaüstünde fareyle sürükleme, tekerlek ve trackpad ile gezilebilir.
+
 ## Kontrol
 
 ```bash
