@@ -96,8 +96,11 @@ export function AppShell({ user, onSignedOut }: Props) {
         <span className="text-lg font-bold">Todap</span>
         <div className="flex items-center gap-3 text-sm">
           <span className="max-w-[10rem] truncate">{user.name}</span>
-          <button type="button" onClick={handleLogout} className="rounded-md bg-white/15 px-3 py-1.5 font-medium">
-            Çıkış yap
+          <button type="button" onClick={handleLogout} aria-label="Çıkış yap" title="Çıkış yap" className="rounded-md bg-white/15 p-2 font-medium">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v10" />
+              <path d="M6.34 6.34a8 8 0 1 0 11.32 0" />
+            </svg>
           </button>
         </div>
       </header>
