@@ -2,6 +2,16 @@ import { HttpError } from "./http-error.js";
 
 const ID_PATTERN = /^[1-9]\d*$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
+export function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const email = value.trim().toLowerCase();
+  return email.length <= MAX_EMAIL_LENGTH && EMAIL_PATTERN.test(email) ? email : null;
+}
 
 export function asObject(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {

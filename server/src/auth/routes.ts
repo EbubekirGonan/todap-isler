@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { consumeLinkToken, consumeLoginCode, requestLogin } from "./login.js";
+import { normalizeEmail } from "../validation.js";
 import {
   clearSessionCookie,
   createSession,
@@ -10,9 +11,7 @@ import {
   setSessionCookie,
 } from "./session.js";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_PATTERN = /^\d{6}$/;
-const MAX_EMAIL_LENGTH = 254;
 const MAX_TOKEN_LENGTH = 200;
 
 // IP başına sınırlar; tek bir kişinin ya da betiğin istek seline karşı.
@@ -33,18 +32,6 @@ const verifyLimiter = rateLimit({
 });
 
 export const authRouter = Router();
-
-// Geçersiz e-posta null döner.
-function normalizeEmail(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const email = value.trim().toLowerCase();
-  if (email.length > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.test(email)) {
-    return null;
-  }
-  return email;
-}
 
 // E-posta kayıtlı olsun ya da olmasın aynı yanıt döner (hesap keşfini engeller).
 authRouter.post("/request", requestLimiter, async (req, res) => {

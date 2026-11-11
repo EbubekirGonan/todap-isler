@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getMyTeams, listTeams, logout, type CurrentUser, type Team, type TeamSummary } from '../api';
 import { AllTasksScreen } from './AllTasksScreen';
+import { AdminScreen } from './AdminScreen';
 import { AssociationScreen } from './AssociationScreen';
 import { FeedScreen } from './FeedScreen';
 import { MyTasksScreen } from './MyTasksScreen';
@@ -71,7 +72,7 @@ export function AppShell({ user, onSignedOut }: Props) {
 
   const tabTeams = user.isAdmin ? allTeams : teams;
   const teamTabs: TabItem[] = (tabTeams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
-  const tabs = [...FIXED_TABS, ...teamTabs];
+  const tabs = [...FIXED_TABS, ...(user.isAdmin ? [{ key: 'admin', label: 'Yönetim' }] : []), ...teamTabs];
   const activeTeam = tabTeams?.find((team) => `team:${team.id}` === activeKey) ?? null;
   const showsTaskActions = activeKey === 'mine' || activeKey === 'pool';
 
@@ -136,6 +137,7 @@ export function AppShell({ user, onSignedOut }: Props) {
           <FeedScreen key={reloadKey} reloadKey={reloadKey} onOpenTask={(id) => setOpenTask(id)} />
         )}
         {activeKey === 'association' && <AssociationScreen isAdmin={user.isAdmin} />}
+        {activeKey === 'admin' && user.isAdmin && <AdminScreen />}
         {activeTeam && (
           <TeamWorkspace
             key={activeTeam.id}

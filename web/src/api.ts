@@ -38,6 +38,17 @@ export type CurrentUser = {
   isAdmin: boolean;
 };
 
+export type NewUser = {
+  name: string;
+  email: string;
+  phone: string;
+  isAdmin: boolean;
+};
+
+export function createUser(user: NewUser): Promise<{ id: string }> {
+  return request('/api/users', { method: 'POST', body: JSON.stringify(user) });
+}
+
 export type Team = {
   id: string;
   name: string;

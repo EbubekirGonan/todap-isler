@@ -43,6 +43,9 @@ Herkes için:
 6. Ekipler: Tüm ekiplerin listesi. Her ekipte kadro durumu ("x/y kişi · n açık yer" veya "Kadro dolu") ve o ekibin üstlendiği faaliyetler görünür. Bir kişi bir ekibe aynı anda bir kez girer; ayrıldıktan sonra tekrar katılabilir. Katılım yalnızca açık yer varsa mümkündür (gerekli kişi sayısı − aktif üye sayısı > 0). Gerekli kişi sayısı sonradan düzenlenebilir.
 7. Akış: Uygulamada yapılan hareketlerin günlüğü (herkese açık). Kim ne yaptı, neyi ekledi, değiştirdi, kimi ekipten çıkardı gibi kayıtlar en yeniden eskiye listelenir; "Daha fazla" ile eski kayıtlar açılır. Ekibe özel görevlerin başlığı herkese gösterilir (bkz. Kararlar 1).
 
+Yalnızca yöneticilere:
+- Yönetim: Ad ve e-posta zorunlu, telefon isteğe bağlı olacak şekilde kişi eklenir. Yönetici yetkisi isteğe bağlıdır ve varsayılan olarak kapalıdır. Aynı e-posta adresiyle yeniden kayıt yapılamaz. Yetki sunucuda da doğrulanır.
+
 Sadece üyelere (şimdilik):
 8. Ekip sekmeleri (ör. "Yönetim Kurulu", "Sosyal medya"): her ekip için ayrı sekme, sadece o ekibin üyesi görür. İçerik: dönem bilgisi (dönemliyse kalan süre çubuğu), ekibin görevleri, üyeler ve rolleri.
 
