@@ -6,7 +6,7 @@ import {
   updateTeamMessage,
   type TeamMessage,
 } from '../api';
-import { formatDateTime } from '../format';
+import { formatDate, formatTime } from '../format';
 import { Spinner } from './Spinner';
 
 const MAX_LENGTH = 2000;
@@ -75,8 +75,8 @@ export function TeamChat({ teamId, canWrite }: Props) {
     };
   }, [teamId]);
 
-  const collapsible = messages.length > PREVIEW_COUNT;
-  const visibleMessages = expanded ? messages : messages.slice(-PREVIEW_COUNT);
+  const collapsible = messages.length > PREVIEW_COUNT || hasMore;
+  const visibleMessages = (expanded ? [...messages] : messages.slice(-PREVIEW_COUNT)).reverse();
 
   async function loadOlder() {
     const oldest = messages[0];
@@ -162,19 +162,76 @@ export function TeamChat({ teamId, canWrite }: Props) {
       {!canWrite && <p className="mt-1 text-xs text-slate-500">Yalnızca okuma: bu sohbete ekip üyeleri yazabilir.</p>}
 
       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-        {expanded && (
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              aria-label="Mesaj kutusunu kapat"
-              title="Kapat"
-              className="rounded-full p-1 text-slate-500 hover:bg-slate-100"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+        {((canWrite && !composing) || expanded) && (
+          <div className="mb-3 flex items-center justify-between gap-2">
+            {canWrite && !composing ? (
+              <button
+                type="button"
+                onClick={() => setComposing(true)}
+                aria-label="Mesaj yaz"
+                title="Mesaj yaz"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-2xl leading-none text-teal-700 hover:bg-teal-100"
+              >
+                +
+              </button>
+            ) : <span />}
+            {expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Mesaj kutusunu kapat"
+                title="Kapat"
+                className="rounded-full p-1 text-slate-500 hover:bg-slate-100"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+        {canWrite && composing && (
+          <div className="mb-3 space-y-2">
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              maxLength={MAX_LENGTH}
+              rows={2}
+              autoFocus
+              placeholder="Ekibe mesaj yazın"
+              aria-label="Mesaj"
+              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                {draft.length}/{MAX_LENGTH}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={cancelCompose}
+                  aria-label="İptal"
+                  title="İptal"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void send()}
+                  disabled={!draft.trim() || sending}
+                  aria-label="Gönder"
+                  title="Gönder"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {loading && <Spinner />}
@@ -182,20 +239,15 @@ export function TeamChat({ teamId, canWrite }: Props) {
         {!loading && !loadError && messages.length === 0 && (
           <p className="text-sm text-slate-600">Henüz mesaj yok.</p>
         )}
-        {expanded && hasMore && (
-          <button
-            type="button"
-            onClick={() => void loadOlder()}
-            disabled={loadingOlder}
-            className="mb-3 w-full text-sm font-medium text-teal-700 disabled:opacity-50"
-          >
-            {loadingOlder ? 'Yükleniyor…' : 'Daha eski mesajlar'}
-          </button>
-        )}
         <div className="relative">
           <ul className="space-y-3">
-            {visibleMessages.map((message) => (
+            {visibleMessages.map((message, index) => (
               <li key={message.id}>
+                {(index === 0 || formatDate(message.createdAt) !== formatDate(visibleMessages[index - 1].createdAt)) && (
+                  <div className="mb-3 text-center text-xs font-medium text-slate-500">
+                    <time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time>
+                  </div>
+                )}
                 <div
                   className={`max-w-[85%] rounded-lg p-3 ${
                     message.isMine ? 'ml-auto bg-teal-50' : 'mr-auto bg-slate-100'
@@ -207,7 +259,7 @@ export function TeamChat({ teamId, canWrite }: Props) {
                     {message.isMine && ' (siz)'}
                   </span>
                   <span>
-                    {formatDateTime(message.createdAt)}
+                    <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
                     {message.updatedAt && ' · düzenlendi'}
                   </span>
                 </div>
@@ -262,7 +314,7 @@ export function TeamChat({ teamId, canWrite }: Props) {
             ))}
           </ul>
           {!expanded && collapsible && (
-            <div className="absolute inset-x-0 top-0 flex h-28 items-center justify-center bg-gradient-to-b from-white via-white/80 to-transparent backdrop-blur-[2px]">
+            <div className="absolute inset-x-0 bottom-0 flex h-28 items-center justify-center bg-gradient-to-t from-white via-white/80 to-transparent backdrop-blur-[2px]">
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
@@ -273,66 +325,18 @@ export function TeamChat({ teamId, canWrite }: Props) {
             </div>
           )}
         </div>
+        {expanded && hasMore && (
+          <button
+            type="button"
+            onClick={() => void loadOlder()}
+            disabled={loadingOlder}
+            className="mt-3 w-full text-sm font-medium text-teal-700 disabled:opacity-50"
+          >
+            {loadingOlder ? 'Yükleniyor…' : 'Daha eski mesajlar'}
+          </button>
+        )}
+        {actionError && <p role="alert" className="mt-2 text-sm text-red-700">{actionError}</p>}
       </div>
-
-      {actionError && <p role="alert" className="mt-2 text-sm text-red-700">{actionError}</p>}
-
-      {canWrite && !composing && (
-        <button
-          type="button"
-          onClick={() => setComposing(true)}
-          aria-label="Mesaj yaz"
-          title="Mesaj yaz"
-          className="fixed right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-3xl leading-none text-white shadow-lg hover:bg-teal-800"
-        >
-          +
-        </button>
-      )}
-
-      {canWrite && composing && (
-        <div className="mt-3 space-y-2">
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            maxLength={MAX_LENGTH}
-            rows={2}
-            autoFocus
-            placeholder="Ekibe mesaj yazın"
-            aria-label="Mesaj"
-            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">
-              {draft.length}/{MAX_LENGTH}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={cancelCompose}
-                aria-label="İptal"
-                title="İptal"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={!draft.trim() || sending}
-                aria-label="Gönder"
-                title="Gönder"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-700 text-white hover:bg-teal-800 disabled:opacity-50"
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M5 12.5l4.5 4.5L19 7.5" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

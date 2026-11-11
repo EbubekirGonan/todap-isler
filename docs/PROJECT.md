@@ -136,7 +136,8 @@ Ekip mesajları (team_messages): Her ekip sayfasında ekip içi ortak sohbet (or
 - Mesajlar Akış'a, Dernek'e veya başka bir yere yansımaz.
 - Mesaj yazan kişi kendi mesajını düzenleyebilir ve silebilir (yumuşak silme, deleted_at). Düzenlenen mesaj "düzenlendi" olarak işaretlenir.
 - Yenileme: Sayfa açıkken 30 sn'de bir otomatik yenileme yapılmaz. Sayfada yenile düğmesi bulunur; sekme tekrar öne geldiğinde de liste yenilenir.
-- Görünüm: Mesajlar eskiden yeniye sıralanır. Kapalıyken yalnızca son 3 mesaj görünür, üstü buğulanır ve "Eski konuşmaları gör" ile tüm liste açılır. Açıkken sağ üstteki × ile tekrar kapanır. Yazma "+" düğmesi sağ altta sabittir ve kutu açık/kapalı fark etmez aynı yerde durur.
+- Görünüm: Mesajlar yeniden eskiye sıralanır; en yeni mesaj en üstte görünür. Kapalıyken yalnızca son 3 mesaj görünür, altı buğulanır ve "Eski konuşmaları gör" ile liste açılır. Daha eski mesajlar listenin altından yüklenir. Açıkken sağ üstteki × ile tekrar kapanır. Yazma "+" düğmesi sohbet kutusunun üstünde yer alır ve yüzen düğme değildir.
+- Tarih: Mesaj gönderilen her günün tarihi, İstanbul saatine göre mesaj kutularının dışında ve o günün ilk görünen mesajından önce bir kez gösterilir. Mesaj kutusunda yalnızca saat ve varsa düzenlenme bilgisi yer alır.
 - Yetki kuralı tek bir modülde (policy/visibility) toplanır.
 Şimdilik dışında (sonraya bırak, şemayı bunlara engel olmayacak şekilde tut): workflow motoru, görev bağımlılıkları, bildirimler, tekrarlayan görevler, "sürekli sorumluluklar" (responsibilities tabloları), onay akışları, zaman takibi, raporlama panoları, kanban görünümü.
 

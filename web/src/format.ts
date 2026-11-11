@@ -46,6 +46,27 @@ const dateTimeFormatter = new Intl.DateTimeFormat('tr-TR', {
   minute: '2-digit',
 });
 
+const dateFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: 'Europe/Istanbul',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+const timeFormatter = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: 'Europe/Istanbul',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 export function formatDateTime(value: string): string {
   return dateTimeFormatter.format(new Date(value));
+}
+
+export function formatDate(value: string): string {
+  return dateFormatter.format(new Date(value));
+}
+
+export function formatTime(value: string): string {
+  return timeFormatter.format(new Date(value));
 }
