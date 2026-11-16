@@ -121,6 +121,7 @@ tasksRouter.post("/", async (req, res) => {
     description: parseOptionalText(body.description, "Açıklama", 5000),
     projectId: parseOptionalId(body.projectId, "Geçersiz proje."),
     teamId: parseOptionalId(body.teamId, "Geçersiz ekip."),
+    parentTaskId: parseOptionalId(body.parentTaskId, "Geçersiz üst iş."),
     dueDate: parseOptionalDate(body.dueDate, "Son tarih"),
     targetDate: parseOptionalDate(body.targetDate, "Ara hedef tarihi"),
     estimatedPeople: parseEstimatedPeople(body.estimatedPeople),
@@ -166,6 +167,9 @@ function parsePatch(body: Record<string, unknown>): TaskPatch {
   }
   if ("projectId" in body) {
     patch.projectId = parseOptionalId(body.projectId, "Geçersiz proje.");
+  }
+  if ("parentTaskId" in body) {
+    patch.parentTaskId = parseOptionalId(body.parentTaskId, "Geçersiz üst iş.");
   }
   return patch;
 }

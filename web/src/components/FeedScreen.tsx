@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { listFeed, type FeedEntry } from '../api';
-import { formatDateTime, historyLabel } from '../format';
+import { listFeed, type FeedEntry, type TaskStatus } from '../api';
+import { formatDateTime, historyLabel, STATUS_LABELS } from '../format';
 import { useLoad } from '../useLoad';
 import { Spinner } from './Spinner';
 
@@ -170,7 +170,26 @@ function entryKey(entry: FeedEntry): string {
 }
 
 function describe(entry: FeedEntry): string {
+  if (entry.kind === 'task' && entry.field === 'status') {
+    const from = STATUS_LABELS[entry.oldValue as TaskStatus] ?? entry.oldValue ?? '?';
+    const to = STATUS_LABELS[entry.newValue as TaskStatus] ?? entry.newValue ?? '?';
+    return `Durumu değiştirdi: ${from} → ${to}`;
+  }
+  if (entry.kind === 'task' && entry.field === 'description') {
+    return `Açıklamayı değiştirdi: "${entry.oldValue || 'boş'}" → "${entry.newValue || 'boş'}"`;
+  }
+  if (entry.kind === 'task' && entry.field === 'parent_task_id') {
+    const from = entry.oldValue ? `"${entry.oldValue}"` : 'yok';
+    const to = entry.newValue ? `"${entry.newValue}"` : 'yok';
+    return `Üst işi değiştirdi: ${from} → ${to}`;
+  }
   if (entry.kind === 'task') return historyLabel(entry.field ?? '');
+  if (entry.kind === 'project' && entry.action === 'linked_team' && entry.newValue) {
+    return `Faaliyeti şu ekibe bağladı: ${entry.newValue}`;
+  }
+  if (entry.kind === 'project' && entry.action === 'unlinked_team' && entry.oldValue) {
+    return `Faaliyetin ekip bağlantısını kaldırdı: ${entry.oldValue}`;
+  }
   if (entry.kind === 'project') return PROJECT_ACTION_LABELS[entry.action ?? ''] ?? 'Faaliyette değişiklik yaptı';
   if (entry.action === 'updated' && entry.field === 'required_people') {
     return `Kadro sayısını ${entry.oldValue ?? '?'} → ${entry.newValue ?? '?'} olarak değiştirdi`;

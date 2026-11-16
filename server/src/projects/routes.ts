@@ -5,7 +5,7 @@ import { query, withTransaction } from "../db.js";
 import { HttpError } from "../http-error.js";
 import { recordActivity } from "../activity/service.js";
 import { listTasks } from "../tasks/service.js";
-import { isActiveTeamMember } from "../policy/visibility.js";
+import { canLinkTeamToProject } from "../policy/visibility.js";
 import {
   asObject,
   parseId,
@@ -140,7 +140,7 @@ projectsRouter.post("/", async (req, res) => {
     );
     const projectId = result.rows[0].id;
     for (const teamId of teamIds) {
-      if (!(await isActiveTeamMember(client, teamId, req.user!.id))) {
+      if (!(await canLinkTeamToProject(client, req.user!, teamId))) {
         throw new HttpError(403, "Yalnızca üyesi olduğunuz ekipler bağlanabilir.");
       }
       await client.query("INSERT INTO project_teams (project_id, team_id) VALUES ($1, $2)", [projectId, teamId]);
@@ -213,7 +213,7 @@ projectsRouter.post("/:id/teams", async (req, res) => {
     if (!team.rowCount) {
       throw new HttpError(400, "Ekip bulunamadı.");
     }
-    if (!(await isActiveTeamMember(client, teamId, req.user!.id))) {
+    if (!(await canLinkTeamToProject(client, req.user!, teamId))) {
       throw new HttpError(403, "Yalnızca üyesi olduğunuz ekipler bağlanabilir.");
     }
 

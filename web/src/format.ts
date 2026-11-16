@@ -20,6 +20,7 @@ const HISTORY_LABELS: Record<string, string> = {
   description: 'Açıklamayı değiştirdi',
   due_date: 'Son tarihi değiştirdi',
   target_date: 'Ara hedef tarihini değiştirdi',
+  project_id: 'Faaliyeti değiştirdi',
 };
 
 export function historyLabel(field: string): string {

@@ -11,6 +11,7 @@ export type NewTaskInput = {
   description: string | null;
   projectId: string | null;
   teamId: string | null;
+  parentTaskId: string | null;
   dueDate: string | null;
   targetDate: string | null;
   estimatedPeople: number;
@@ -27,6 +28,7 @@ export type TaskPatch = Partial<{
   teamOnly: boolean;
   teamId: string | null;
   projectId: string | null;
+  parentTaskId: string | null;
 }>;
 
 export type TaskFilters = {
@@ -76,6 +78,7 @@ type TaskBaseRow = {
   id: string;
   project_id: string | null;
   team_id: string | null;
+  parent_task_id: string | null;
   title: string;
   description: string | null;
   status: TaskStatus;
@@ -208,26 +211,46 @@ export async function getTask(userId: string, taskId: string) {
       ORDER BY h.created_at, h.id`,
     [taskId],
   );
+  const subtasks = await query(
+    `SELECT t.id, t.title, t.status
+       FROM tasks t
+      WHERE t.parent_task_id = $1 AND ${visibleToUserSql()}
+      ORDER BY t.created_at, t.id`,
+    [taskId],
+  );
 
-  return { ...toTaskDto(row, await activeTeamIds(userId)), comments: comments.rows, history: history.rows };
+  return { ...toTaskDto(row, await activeTeamIds(userId)), comments: comments.rows, history: history.rows, subtasks: subtasks.rows };
 }
 
-export async function createTask(userId: string, input: NewTaskInput): Promise<string> {
-  if (input.teamOnly && !input.teamId) {
-    throw new HttpError(400, "Ekibe özel görev için ekip seçmelisiniz.");
-  }
-
+export async function createTask(userId: string, requested: NewTaskInput): Promise<string> {
   return withTransaction(async (client) => {
+    // Alt iş, faaliyet ve ekibi üst işten miras alır; istemcinin gönderdiği değerler yok sayılır.
+    let input = requested;
+    if (requested.parentTaskId) {
+      const parent = await lockVisibleTask(client, userId, requested.parentTaskId);
+      input = {
+        ...requested,
+        projectId: parent.project_id,
+        teamId: parent.team_id,
+        teamOnly: parent.team_only,
+      };
+    }
+
+    if (input.teamOnly && !input.teamId) {
+      throw new HttpError(400, "Ekibe özel görev için ekip seçmelisiniz.");
+    }
     await ensureProjectAndTeam(client, input.projectId, input.teamId);
+    await checkParentTask(client, null, input.parentTaskId, input.projectId);
 
     const result = await client.query<{ id: string }>(
-      `INSERT INTO tasks (project_id, team_id, title, description, due_date, target_date, estimated_people,
-                          team_only, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO tasks (project_id, team_id, parent_task_id, title, description, due_date, target_date,
+                          estimated_people, team_only, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         input.projectId,
         input.teamId,
+        input.parentTaskId,
         input.title,
         input.description,
         input.dueDate,
@@ -257,12 +280,14 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
       teamOnly: patch.teamOnly ?? current.team_only,
       teamId: "teamId" in patch ? (patch.teamId ?? null) : current.team_id,
       projectId: "projectId" in patch ? (patch.projectId ?? null) : current.project_id,
+      parentTaskId: "parentTaskId" in patch ? (patch.parentTaskId ?? null) : current.parent_task_id,
     };
 
     if (next.teamOnly && !next.teamId) {
       throw new HttpError(400, "Ekibe özel görev için ekip seçmelisiniz.");
     }
     await ensureProjectAndTeam(client, next.projectId, next.teamId);
+    await checkParentTask(client, taskId, next.parentTaskId, next.projectId);
 
     if (next.estimatedPeople < (await getOwnerCount(client, taskId))) {
       throw new HttpError(409, "Tahmini kişi sayısı, görevdeki katkı sağlayan kişi sayısından az olamaz.");
@@ -303,6 +328,11 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
     compare("team_only", current.team_only, next.teamOnly);
     compare("team_id", current.team_id, next.teamId);
     compare("project_id", current.project_id, next.projectId);
+    if (next.parentTaskId !== current.parent_task_id) {
+      const oldParentTitle = current.parent_task_id ? await taskTitle(client, current.parent_task_id) : null;
+      const newParentTitle = next.parentTaskId ? await taskTitle(client, next.parentTaskId) : null;
+      changes.push(["parent_task_id", oldParentTitle, newParentTitle]);
+    }
 
     if (changes.length === 0) {
       return;
@@ -318,7 +348,7 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
     await client.query(
       `UPDATE tasks
           SET title = $2, description = $3, status = $4, due_date = $5, estimated_people = $6,
-              team_only = $7, team_id = $8, project_id = $9, target_date = $10,
+              team_only = $7, team_id = $8, project_id = $9, target_date = $10, parent_task_id = $11,
               completed_at = ${completedAtSql},
               updated_at = now(), last_activity_at = now()
         WHERE id = $1`,
@@ -333,11 +363,19 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
         next.teamId,
         next.projectId,
         next.targetDate,
+        next.parentTaskId,
       ],
     );
 
     for (const [field, before, after] of changes) {
       await recordHistory(client, taskId, userId, field, before, after);
+    }
+
+    if (next.projectId !== current.project_id) {
+      await moveSubtasksToProject(client, userId, taskId, next.projectId);
+    }
+    if (next.teamId !== current.team_id || next.teamOnly !== current.team_only) {
+      await inheritTeamToSubtasks(client, userId, taskId, next.teamId, next.teamOnly);
     }
   });
 }
@@ -345,6 +383,13 @@ export async function updateTask(userId: string, taskId: string, patch: TaskPatc
 export async function deleteTask(userId: string, taskId: string): Promise<void> {
   await withTransaction(async (client) => {
     await lockVisibleTask(client, userId, taskId);
+    const subtasks = await client.query(
+      "SELECT 1 FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL LIMIT 1",
+      [taskId],
+    );
+    if (subtasks.rowCount) {
+      throw new HttpError(409, "Alt işi olan bir iş silinemez. Önce alt işlerin üst işini kaldırın.");
+    }
     await client.query(
       "UPDATE tasks SET deleted_at = now(), updated_at = now(), last_activity_at = now() WHERE id = $1",
       [taskId],
@@ -488,8 +533,8 @@ export async function addComment(userId: string, taskId: string, body: string): 
 // Görevi görünürse kilitler. Görünmüyorsa 404 döner; böylece görevin varlığı da sızdırılmaz.
 async function lockVisibleTask(client: pg.PoolClient, userId: string, taskId: string): Promise<TaskBaseRow> {
   const result = await client.query<TaskBaseRow>(
-    `SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.due_date,
-            t.team_only, t.estimated_people
+    `SELECT t.id, t.project_id, t.team_id, t.parent_task_id, t.title, t.description, t.status, t.due_date,
+            t.target_date, t.team_only, t.estimated_people
        FROM tasks t
       WHERE t.id = $1 AND ${visibleToUserSql()}
       FOR UPDATE OF t`,
@@ -534,6 +579,135 @@ async function ensureProjectAndTeam(
       throw new HttpError(400, "Ekip bulunamadı.");
     }
   }
+}
+
+// Üst iş aynı faaliyette olmalıdır; bir iş kendisinin ya da kendi alt işinin üst işi olamaz (döngü).
+async function checkParentTask(
+  client: pg.PoolClient,
+  taskId: string | null,
+  parentTaskId: string | null,
+  projectId: string | null,
+): Promise<void> {
+  if (!parentTaskId) {
+    return;
+  }
+  if (parentTaskId === taskId) {
+    throw new HttpError(400, "Bir iş kendisinin üst işi olamaz.");
+  }
+  const parent = await client.query<{ project_id: string | null }>(
+    "SELECT project_id FROM tasks WHERE id = $1 AND deleted_at IS NULL",
+    [parentTaskId],
+  );
+  if (!parent.rowCount) {
+    throw new HttpError(400, "Üst iş bulunamadı.");
+  }
+  if (parent.rows[0].project_id !== projectId) {
+    throw new HttpError(400, "Alt iş, üst işle aynı faaliyette olmalıdır.");
+  }
+  if (taskId) {
+    const cycle = await client.query(
+      `WITH RECURSIVE ancestors AS (
+         SELECT id, parent_task_id FROM tasks WHERE id = $1
+         UNION
+         SELECT t.id, t.parent_task_id FROM tasks t JOIN ancestors a ON t.id = a.parent_task_id
+       )
+       SELECT 1 FROM ancestors WHERE id = $2 LIMIT 1`,
+      [parentTaskId, taskId],
+    );
+    if (cycle.rowCount) {
+      throw new HttpError(400, "Bu iş, seçilen üst işin üst zincirinde olduğu için üst iş yapılamaz.");
+    }
+  }
+}
+
+// Faaliyeti değişen işin tüm alt işleri aynı faaliyete taşınır; aksi halde aynı faaliyet kuralı bozulur.
+async function moveSubtasksToProject(
+  client: pg.PoolClient,
+  userId: string,
+  taskId: string,
+  projectId: string | null,
+): Promise<void> {
+  const subtasks = await client.query<{ id: string; project_id: string | null }>(
+    `WITH RECURSIVE subtree AS (
+       SELECT id, project_id FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL
+       UNION
+       SELECT t.id, t.project_id FROM tasks t JOIN subtree s ON t.parent_task_id = s.id WHERE t.deleted_at IS NULL
+     )
+     SELECT id, project_id FROM subtree`,
+    [taskId],
+  );
+  for (const subtask of subtasks.rows) {
+    if (subtask.project_id === projectId) {
+      continue;
+    }
+    await client.query(
+      "UPDATE tasks SET project_id = $2, updated_at = now(), last_activity_at = now() WHERE id = $1",
+      [subtask.id, projectId],
+    );
+    await recordHistory(client, subtask.id, userId, "project_id", subtask.project_id, projectId);
+  }
+}
+
+// Üst işin ekibi ve ekibe özel durumu tüm alt iş ağacına yayılır.
+async function inheritTeamToSubtasks(
+  client: pg.PoolClient,
+  userId: string,
+  taskId: string,
+  teamId: string | null,
+  teamOnly: boolean,
+): Promise<void> {
+  if (teamOnly) {
+    const outsider = await client.query(
+      `WITH RECURSIVE subtree AS (
+         SELECT id FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL
+         UNION
+         SELECT t.id FROM tasks t JOIN subtree s ON t.parent_task_id = s.id WHERE t.deleted_at IS NULL
+       )
+       SELECT 1
+         FROM task_assignments a
+         JOIN subtree s ON s.id = a.task_id
+        WHERE a.ended_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM team_members m
+             WHERE m.team_id = $2 AND m.user_id = a.user_id AND m.ended_at IS NULL
+          )
+        LIMIT 1`,
+      [taskId, teamId],
+    );
+    if (outsider.rowCount) {
+      throw new HttpError(409, "Alt işlerden birinde bu ekibin üyesi olmayan biri atanmış. Önce ataması kaldırılmalı.");
+    }
+  }
+
+  const subtasks = await client.query<{ id: string; team_id: string | null; team_only: boolean }>(
+    `WITH RECURSIVE subtree AS (
+       SELECT id, team_id, team_only FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL
+       UNION
+       SELECT t.id, t.team_id, t.team_only FROM tasks t JOIN subtree s ON t.parent_task_id = s.id WHERE t.deleted_at IS NULL
+     )
+     SELECT id, team_id, team_only FROM subtree`,
+    [taskId],
+  );
+  for (const subtask of subtasks.rows) {
+    if (subtask.team_id === teamId && subtask.team_only === teamOnly) {
+      continue;
+    }
+    await client.query(
+      "UPDATE tasks SET team_id = $2, team_only = $3, updated_at = now(), last_activity_at = now() WHERE id = $1",
+      [subtask.id, teamId, teamOnly],
+    );
+    if (subtask.team_id !== teamId) {
+      await recordHistory(client, subtask.id, userId, "team_id", subtask.team_id, teamId);
+    }
+    if (subtask.team_only !== teamOnly) {
+      await recordHistory(client, subtask.id, userId, "team_only", String(subtask.team_only), String(teamOnly));
+    }
+  }
+}
+
+async function taskTitle(client: pg.PoolClient, taskId: string): Promise<string | null> {
+  const result = await client.query<{ title: string }>("SELECT title FROM tasks WHERE id = $1", [taskId]);
+  return result.rows[0]?.title ?? null;
 }
 
 async function getOwnerCount(client: pg.PoolClient, taskId: string): Promise<number> {

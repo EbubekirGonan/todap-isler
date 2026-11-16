@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getMyTeams, listTeams, logout, type CurrentUser, type Team, type TeamSummary } from '../api';
+import { getMyTeams, listProjects, listTeams, logout, type CurrentUser, type Project, type Team, type TeamSummary } from '../api';
 import { AllTasksScreen } from './AllTasksScreen';
 import { AdminScreen } from './AdminScreen';
 import { AssociationScreen } from './AssociationScreen';
@@ -51,8 +51,9 @@ export function AppShell({ user, onSignedOut }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
 
-  // Ekip sekmeleri üyeliğe göre oluşur; yönetici için tüm ekipler listelenir. Katılma ve ayrılmada yeniden okunur.
+  // Ekip sekmeleri üyeliğe göre oluşur; yönetici için tüm ekipler listelenir. Tüm ekipler faaliyete ekip bağlamada da kullanılır.
   const loadTeams = useCallback(() => {
     getMyTeams()
       .then((list) => {
@@ -60,18 +61,25 @@ export function AppShell({ user, onSignedOut }: Props) {
         setTeamsError(null);
       })
       .catch(() => setTeamsError('Ekipler yüklenemedi.'));
-    if (user.isAdmin) {
-      listTeams()
-        .then((list) => setAllTeams(list.map(summaryToTeam)))
-        .catch(() => setTeamsError('Ekipler yüklenemedi.'));
-    }
-  }, [user.isAdmin]);
+    listTeams()
+      .then((list) => setAllTeams(list.map(summaryToTeam)))
+      .catch(() => setTeamsError('Ekipler yüklenemedi.'));
+  }, []);
 
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
 
+  // Yeni iş formundaki faaliyet seçici için; faaliyet değişince yeniden okunur.
+  useEffect(() => {
+    listProjects()
+      .then(setProjects)
+      .catch(() => setProjects([]));
+  }, [reloadKey]);
+
   const tabTeams = user.isAdmin ? allTeams : teams;
+  // Görev ve faaliyet formlarında yönetici tüm ekipleri, diğer kullanıcılar yalnızca üye olduğu ekipleri görür.
+  const formTeams = (user.isAdmin ? allTeams : teams) ?? [];
   const teamTabs: TabItem[] = (tabTeams ?? []).map((team) => ({ key: `team:${team.id}`, label: team.name }));
   const tabs = [...FIXED_TABS, ...(user.isAdmin ? [{ key: 'admin', label: 'Yönetim' }] : []), ...teamTabs, { key: 'feedback', label: 'Geri bildirim' }];
   const activeTeam = tabTeams?.find((team) => `team:${team.id}` === activeKey) ?? null;
@@ -126,7 +134,8 @@ export function AppShell({ user, onSignedOut }: Props) {
         {activeKey === 'projects' && (
           <ProjectsScreen
             reloadKey={reloadKey}
-            teams={teams ?? []}
+            teams={formTeams}
+            allTeams={formTeams}
             onOpenTask={(id) => setOpenTask(id)}
             onChanged={refreshLists}
           />
@@ -169,6 +178,8 @@ export function AppShell({ user, onSignedOut }: Props) {
           taskId={openTask}
           currentUserId={user.id}
           isAdmin={user.isAdmin}
+          teams={formTeams}
+          projects={projects}
           onClose={() => setOpenTask(null)}
           onChanged={refreshLists}
         />
@@ -176,7 +187,8 @@ export function AppShell({ user, onSignedOut }: Props) {
 
       {creating && (
         <TaskForm
-          teams={teams ?? []}
+          teams={formTeams}
+          projects={projects}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);

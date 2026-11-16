@@ -44,6 +44,15 @@ export function canJoinTask(task: { team_only: boolean; team_id: string | null }
   return !task.team_only || (task.team_id !== null && teamIds.has(task.team_id));
 }
 
+// Faaliyete ekip bağlamak: ekip üyeleri ve yönetici yapabilir.
+export async function canLinkTeamToProject(
+  client: pg.PoolClient,
+  user: { id: string; isAdmin: boolean },
+  teamId: string,
+): Promise<boolean> {
+  return user.isAdmin || (await isActiveTeamMember(client, teamId, user.id));
+}
+
 // Ekibe özel görevlere yalnızca o ekibin aktif üyeleri atanabilir.
 export async function isActiveTeamMember(
   client: pg.PoolClient,

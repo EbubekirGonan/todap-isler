@@ -285,9 +285,16 @@ export type TaskHistoryEntry = {
   actor_name: string;
 };
 
+export type SubtaskSummary = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+};
+
 export type TaskDetail = Task & {
   comments: TaskComment[];
   history: TaskHistoryEntry[];
+  subtasks: SubtaskSummary[];
 };
 
 export type UserOption = {
@@ -300,10 +307,12 @@ export type PoolScope = 'public' | 'mine-team';
 export type NewTask = {
   title: string;
   description: string | null;
+  projectId: string | null;
   teamId: string | null;
   teamOnly: boolean;
   estimatedPeople: number | null;
   dueDate: string | null;
+  parentTaskId?: string | null;
 };
 
 export async function listMyTasks(): Promise<Task[]> {
@@ -344,6 +353,10 @@ export type TaskPatch = {
   dueDate?: string | null;
   targetDate?: string | null;
   estimatedPeople?: number;
+  projectId?: string | null;
+  teamId?: string | null;
+  teamOnly?: boolean;
+  parentTaskId?: string | null;
 };
 
 export function updateTask(taskId: string, patch: TaskPatch): Promise<void> {

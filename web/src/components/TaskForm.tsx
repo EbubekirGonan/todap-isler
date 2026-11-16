@@ -1,18 +1,26 @@
 import { useState, type FormEvent } from 'react';
-import { createTask, type Team } from '../api';
+import { createTask, type Project, type Team } from '../api';
+import { ParentTaskSelect } from './ParentTaskSelect';
 import { Sheet } from './Sheet';
 
 type Props = {
   teams: Team[];
+  projects: Project[];
+  defaultProjectId?: string | null;
+  // Verilirse yeni iş bu işin alt işi olarak eklenir; faaliyet ve üst iş önceden seçilir.
+  parentTask?: { id: string; title: string; projectId: string | null } | null;
   onCreated: () => void;
   onClose: () => void;
 };
 
-// Tek ekip varsa otomatik seçilir; birden fazlaysa seçici gösterilir ve "Ekip yok" seçeneği bulunur.
-export function TaskForm({ teams, onCreated, onClose }: Props) {
+// Ekip seçici her zaman gösterilir ve varsayılan olarak "Ekip yok" seçilidir.
+// Faaliyet seçici, en az bir faaliyet varsa gösterilir; "Faaliyet yok" seçeneği bulunur.
+export function TaskForm({ teams, projects, defaultProjectId = null, parentTask = null, onCreated, onClose }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [teamId, setTeamId] = useState(teams.length === 1 ? teams[0].id : '');
+  const [projectId, setProjectId] = useState(parentTask ? (parentTask.projectId ?? '') : (defaultProjectId ?? ''));
+  const [parentTaskId, setParentTaskId] = useState(parentTask?.id ?? '');
+  const [teamId, setTeamId] = useState('');
   const [teamOnly, setTeamOnly] = useState(false);
   const [estimatedPeople, setEstimatedPeople] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -40,10 +48,13 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
       await createTask({
         title: trimmedTitle,
         description: description.trim() || null,
-        teamId: teamId || null,
-        teamOnly: teamOnly && teamId !== '',
+        // Alt işte faaliyet ve ekip üst işten miras alınır; bu alanlar gönderilmez.
+        projectId: parentTask ? null : projectId || null,
+        teamId: parentTask ? null : teamId || null,
+        teamOnly: !parentTask && teamOnly && teamId !== '',
         estimatedPeople: estimate,
         dueDate: dueDate || null,
+        parentTaskId: parentTask ? parentTask.id : projectId && parentTaskId ? parentTaskId : null,
       });
       onCreated();
     } catch (err) {
@@ -54,7 +65,7 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
   }
 
   return (
-    <Sheet title="Yeni iş" onClose={onClose}>
+    <Sheet title={parentTask ? 'Yeni alt iş' : 'Yeni iş'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <label className="block text-sm font-medium text-slate-800">
           Başlık
@@ -80,7 +91,44 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
           />
         </label>
 
-        {teams.length > 1 && (
+        {parentTask ? (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Faaliyet ve ekip üst işten otomatik alınır.
+          </p>
+        ) : (
+          projects.length > 0 && (
+            <label className="block text-sm font-medium text-slate-800">
+              Faaliyet (isteğe bağlı)
+              <select
+                value={projectId}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                  // Üst iş farklı faaliyette kalamaz; faaliyet değişince seçim sıfırlanır.
+                  setParentTaskId('');
+                }}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+              >
+                <option value="">Faaliyet yok</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        )}
+
+        {!parentTask && projectId !== '' && (
+          <ParentTaskSelect
+            projectId={projectId}
+            value={parentTaskId}
+            current={null}
+            onChange={setParentTaskId}
+          />
+        )}
+
+        {!parentTask && (
           <label className="block text-sm font-medium text-slate-800">
             Ekip
             <select
@@ -126,21 +174,23 @@ export function TaskForm({ teams, onCreated, onClose }: Props) {
           />
         </label>
 
-        <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
-          <input
-            type="checkbox"
-            checked={teamOnly}
-            disabled={teamId === ''}
-            onChange={(event) => setTeamOnly(event.target.checked)}
-            className="h-4 w-4 accent-teal-700"
-          />
-          <span>
-            <span className="block font-medium text-slate-900">Ekibe özel</span>
-            <span className="text-slate-500">
-              {teamId === '' ? 'Görünürlük için bir ekip seçin' : 'Yalnızca bu ekibin üyeleri görür'}
+        {!parentTask && (
+          <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={teamOnly}
+              disabled={teamId === ''}
+              onChange={(event) => setTeamOnly(event.target.checked)}
+              className="h-4 w-4 accent-teal-700"
+            />
+            <span>
+              <span className="block font-medium text-slate-900">Ekibe özel</span>
+              <span className="text-slate-500">
+                {teamId === '' ? 'Görünürlük için bir ekip seçin' : 'Yalnızca bu ekibin üyeleri görür'}
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
 

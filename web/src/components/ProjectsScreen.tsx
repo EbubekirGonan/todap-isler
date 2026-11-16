@@ -13,15 +13,18 @@ import { useLoad } from '../useLoad';
 import { ProjectForm } from './ProjectForm';
 import { Spinner } from './Spinner';
 import { TaskCard } from './TaskCard';
+import { TaskForm } from './TaskForm';
 
 type Props = {
   reloadKey: number;
   teams: Team[];
+  // Faaliyete ekip bağlanırken kullanıcının üye olmadığı ekipler de seçilebilir; sunucu bunu üyelik olmadan kabul eder.
+  allTeams: Team[];
   onOpenTask: (taskId: string) => void;
   onChanged: () => void;
 };
 
-export function ProjectsScreen({ reloadKey, teams, onOpenTask, onChanged }: Props) {
+export function ProjectsScreen({ reloadKey, teams, allTeams, onOpenTask, onChanged }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const { data, error, loading } = useLoad(listProjects, `projects:${reloadKey}`);
@@ -32,6 +35,7 @@ export function ProjectsScreen({ reloadKey, teams, onOpenTask, onChanged }: Prop
         projectId={selectedId}
         project={data?.find((item) => item.id === selectedId) ?? null}
         teams={teams}
+        allTeams={allTeams}
         reloadKey={reloadKey}
         onBack={() => setSelectedId(null)}
         onOpenTask={onOpenTask}
@@ -70,7 +74,7 @@ export function ProjectsScreen({ reloadKey, teams, onOpenTask, onChanged }: Prop
 
       {creating && (
         <ProjectForm
-          teams={teams}
+          teams={allTeams}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
@@ -273,6 +277,7 @@ function ProjectDetail({
   projectId,
   project,
   teams,
+  allTeams,
   reloadKey,
   onBack,
   onOpenTask,
@@ -281,6 +286,7 @@ function ProjectDetail({
   projectId: string;
   project: Project | null;
   teams: Team[];
+  allTeams: Team[];
   reloadKey: number;
   onBack: () => void;
   onOpenTask: (taskId: string) => void;
@@ -288,10 +294,12 @@ function ProjectDetail({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
   const { data, error, loading } = useLoad(
     () => listProjectTasks(projectId),
     `project-tasks:${projectId}:${reloadKey}`,
   );
+  const { data: projects } = useLoad(listProjects, `projects:${reloadKey}`);
 
   return (
     <div className="space-y-4">
@@ -335,7 +343,7 @@ function ProjectDetail({
 
           {editing ? (
             <div className="mt-3">
-              <ProjectEditForm project={project} teams={teams} onChanged={onChanged} onClose={() => setEditing(false)} />
+              <ProjectEditForm project={project} teams={allTeams} onChanged={onChanged} onClose={() => setEditing(false)} />
             </div>
           ) : (
             <>
@@ -352,6 +360,13 @@ function ProjectDetail({
 
       {loading && <Spinner />}
       {!loading && error && <p role="alert" className="text-red-700">{error}</p>}
+      <button
+        type="button"
+        onClick={() => setCreatingTask(true)}
+        className="w-full rounded-md bg-teal-700 px-4 py-3 font-medium text-white"
+      >
+        + İş ekle
+      </button>
       {!loading && !error && data && data.length === 0 && (
         <p className="text-slate-600">Bu faaliyette henüz iş yok.</p>
       )}
@@ -363,6 +378,19 @@ function ProjectDetail({
             </li>
           ))}
         </ul>
+      )}
+
+      {creatingTask && (
+        <TaskForm
+          teams={teams}
+          projects={projects ?? (project ? [project] : [])}
+          defaultProjectId={projectId}
+          onClose={() => setCreatingTask(false)}
+          onCreated={() => {
+            setCreatingTask(false);
+            onChanged();
+          }}
+        />
       )}
     </div>
   );

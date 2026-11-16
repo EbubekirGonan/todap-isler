@@ -9,15 +9,19 @@ import {
   removeTaskAssignment,
   supportTask,
   updateTask,
+  type Project,
   type Task,
   type TaskPatch,
   type TaskStatus,
+  type Team,
 } from '../api';
 import { formatDateOnly, formatDateTime, historyLabel, STATUS_LABELS } from '../format';
 import { useLoad } from '../useLoad';
+import { ParentTaskSelect } from './ParentTaskSelect';
 import { Sheet } from './Sheet';
 import { Spinner } from './Spinner';
 import { TaskBadges } from './TaskCard';
+import { TaskForm } from './TaskForm';
 
 const STATUS_OPTIONS: TaskStatus[] = ['planning', 'in_progress', 'nearly_done', 'done'];
 
@@ -25,11 +29,13 @@ type Props = {
   taskId: string;
   currentUserId: string;
   isAdmin: boolean;
+  teams: Team[];
+  projects: Project[];
   onClose: () => void;
   onChanged: () => void;
 };
 
-export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged }: Props) {
+export function TaskDetail({ taskId, currentUserId, isAdmin, teams, projects, onClose, onChanged }: Props) {
   const [version, setVersion] = useState(0);
   const [assignOpen, setAssignOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -38,6 +44,7 @@ export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [addingSubtask, setAddingSubtask] = useState(false);
   const { data: task, error, loading } = useLoad(() => getTask(taskId), `${taskId}:${version}`);
   const { data: users, error: usersError } = useLoad(() => listUsers(), String(assignOpen));
   const menuRef = useRef<HTMLDivElement>(null);
@@ -99,6 +106,7 @@ export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged 
   const isSupporterMine = supporters.some((a) => a.userId === currentUserId);
 
   return (
+    <>
     <Sheet title={task?.title ?? 'Görev'} onClose={onClose}>
       {loading && <Spinner label="Görev yükleniyor" />}
       {!loading && error && <p role="alert" className="text-red-700">{error}</p>}
@@ -194,6 +202,8 @@ export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged 
           {editing ? (
             <TaskEditForm
               task={task}
+              teams={teams}
+              projects={projects}
               ownerCount={owners.length}
               disabled={busy}
               onCancel={() => setEditing(false)}
@@ -306,6 +316,38 @@ export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged 
 
           {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
 
+          <section aria-label="Alt işler" className="rounded-xl border border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-slate-900">
+                Alt işler
+                {task.subtasks.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-slate-600">
+                    {task.subtasks.filter((subtask) => subtask.status === 'done').length}/{task.subtasks.length} bitti
+                  </span>
+                )}
+              </h3>
+              {!isDone && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setAddingSubtask(true)}
+                  className="rounded-md bg-slate-100 px-3 py-1 text-sm font-medium text-slate-800 disabled:opacity-50"
+                >
+                  + Alt iş ekle
+                </button>
+              )}
+            </div>
+            {task.subtasks.length === 0 && <p className="text-sm text-slate-500">Henüz alt iş yok.</p>}
+            <ul className="space-y-1">
+              {task.subtasks.map((subtask) => (
+                <li key={subtask.id} className="flex items-center justify-between gap-2 text-sm text-slate-800">
+                  <span className="min-w-0 truncate">{subtask.title}</span>
+                  <span className="shrink-0 text-xs text-slate-500">{STATUS_LABELS[subtask.status]}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           <section aria-label="Yorumlar">
             <h3 className="mb-2 font-semibold text-slate-900">Yorumlar</h3>
             {task.comments.length === 0 && <p className="text-sm text-slate-500">Henüz yorum yok.</p>}
@@ -352,11 +394,27 @@ export function TaskDetail({ taskId, currentUserId, isAdmin, onClose, onChanged 
         </div>
       )}
     </Sheet>
+    {addingSubtask && task && (
+      <TaskForm
+        teams={teams}
+        projects={projects}
+        parentTask={{ id: task.id, title: task.title, projectId: task.projectId }}
+        onCreated={() => {
+          setAddingSubtask(false);
+          setVersion((value) => value + 1);
+          onChanged();
+        }}
+        onClose={() => setAddingSubtask(false)}
+      />
+    )}
+    </>
   );
 }
 
 type TaskEditFormProps = {
   task: Task;
+  teams: Team[];
+  projects: Project[];
   ownerCount: number;
   disabled: boolean;
   onSave: (patch: TaskPatch) => Promise<void>;
@@ -364,16 +422,32 @@ type TaskEditFormProps = {
 };
 
 // Görev alanlarını yerinde düzenler. Üst bileşen düzenleme modunu açıp kapatır; ayrı pencere açılmaz.
-function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEditFormProps) {
+// Mevcut faaliyet ya da ekip kullanıcının listesinde yoksa seçeneklere eklenir; aksi halde kaydederken sessizce silinirdi.
+function TaskEditForm({ task, teams, projects, ownerCount, disabled, onSave, onCancel }: TaskEditFormProps) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
   const [status, setStatus] = useState<TaskStatus>(task.status);
+  const [projectId, setProjectId] = useState(task.projectId ?? '');
+  const [parentTaskId, setParentTaskId] = useState(task.parentTaskId ?? '');
+  const [teamId, setTeamId] = useState(task.teamId ?? '');
+  const [teamOnly, setTeamOnly] = useState(task.teamOnly);
+  // Alt işin faaliyet ve ekibi üst işten gelir; bu alanlar düzenlenmez.
+  const isSubtask = Boolean(task.parentTaskId);
   const [estimate, setEstimate] = useState(String(task.estimatedPeople));
   const [dueDate, setDueDate] = useState(task.dueDate ?? '');
   const parsedEstimate = Number(estimate);
   const estimateValid =
     Number.isInteger(parsedEstimate) && parsedEstimate >= 1 && parsedEstimate <= 50 && parsedEstimate >= ownerCount;
   const valid = title.trim() !== '' && estimateValid;
+
+  const projectOptions =
+    task.projectId && task.projectName && !projects.some((p) => p.id === task.projectId)
+      ? [{ id: task.projectId, name: task.projectName }, ...projects]
+      : projects;
+  const teamOptions =
+    task.teamId && task.teamName && !teams.some((t) => t.id === task.teamId)
+      ? [{ id: task.teamId, name: task.teamName }, ...teams]
+      : teams;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -385,6 +459,10 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
       status,
       estimatedPeople: parsedEstimate,
       dueDate: dueDate || null,
+      projectId: projectId || null,
+      parentTaskId: projectId && parentTaskId ? parentTaskId : null,
+      teamId: teamId || null,
+      teamOnly: teamOnly && teamId !== '',
     });
   }
 
@@ -423,6 +501,61 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
         />
       </label>
+      {projectOptions.length > 0 && !isSubtask && (
+        <label className="block text-sm font-medium text-slate-800">
+          Faaliyet (isteğe bağlı)
+          <select
+            value={projectId}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+              // Üst iş farklı faaliyette kalamaz; faaliyet değişince seçim sıfırlanır, özgün faaliyete dönülürse geri gelir.
+              setParentTaskId(event.target.value === (task.projectId ?? '') ? (task.parentTaskId ?? '') : '');
+            }}
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+          >
+            <option value="">Faaliyet yok</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {projectId !== '' && (
+        <ParentTaskSelect
+          projectId={projectId}
+          value={parentTaskId}
+          excludeTaskId={task.id}
+          current={task.parentTaskId && task.parentTitle ? { id: task.parentTaskId, title: task.parentTitle } : null}
+          onChange={setParentTaskId}
+        />
+      )}
+      {isSubtask && (
+        <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          Faaliyet ve ekip üst işten otomatik alınır.
+        </p>
+      )}
+      {!isSubtask && (
+        <label className="block text-sm font-medium text-slate-800">
+          Ekip
+          <select
+            value={teamId}
+            onChange={(event) => {
+              setTeamId(event.target.value);
+              if (!event.target.value) setTeamOnly(false);
+            }}
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base"
+          >
+            <option value="">Ekip yok</option>
+            {teamOptions.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="block text-sm font-medium text-slate-800">
         Tahmini Gerekli Kişi Sayısı
         <input
@@ -447,6 +580,23 @@ function TaskEditForm({ task, ownerCount, disabled, onSave, onCancel }: TaskEdit
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base"
         />
       </label>
+      {!isSubtask && (
+        <label className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            checked={teamOnly}
+            disabled={teamId === ''}
+            onChange={(event) => setTeamOnly(event.target.checked)}
+            className="h-4 w-4 accent-teal-700"
+          />
+          <span>
+            <span className="block font-medium text-slate-900">Ekibe özel</span>
+            <span className="text-slate-500">
+              {teamId === '' ? 'Görünürlük için bir ekip seçin' : 'Yalnızca bu ekibin üyeleri görür'}
+            </span>
+          </span>
+        </label>
+      )}
       <div className="flex gap-2">
         <button
           type="submit"

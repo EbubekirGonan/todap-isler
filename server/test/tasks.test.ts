@@ -651,3 +651,130 @@ describe("ekipler, faaliyet-ekip bağlantıları ve akış", () => {
     assert.equal((await api("GET", "/api/feed?limit=0", yusuf)).status, 400);
   });
 });
+
+describe("alt işler", () => {
+  let owner: string;
+  let projectA: number;
+  let projectB: number;
+
+  before(async () => {
+    owner = await createUser("AltIsSahibi");
+    const a = await query<{ id: string }>("INSERT INTO projects (name, created_by) VALUES ('Faaliyet A', $1) RETURNING id", [owner]);
+    const b = await query<{ id: string }>("INSERT INTO projects (name, created_by) VALUES ('Faaliyet B', $1) RETURNING id", [owner]);
+    projectA = Number(a.rows[0].id);
+    projectB = Number(b.rows[0].id);
+  });
+
+  test("alt iş üst işin altında listelenir ve tamamlanan sayısı görünür", async () => {
+    const parent = await createTask(owner, { projectId: projectA, title: "Üst" });
+    const child = await createTask(owner, { projectId: projectA, parentTaskId: parent, title: "Alt" });
+
+    const detail = (await (await api("GET", `/api/tasks/${parent}`, owner)).json()) as {
+      task: { subtasks: { id: string; status: string }[] };
+    };
+    assert.deepEqual(detail.task.subtasks.map((s) => s.id), [child]);
+  });
+
+  test("alt iş, gönderilen faaliyet farklı olsa bile üst işin faaliyetine yerleşir; kendisi üst iş olamaz (400)", async () => {
+    const other = await createTask(owner, { projectId: projectB, title: "Başka faaliyet" });
+    const res = await api("POST", "/api/tasks", owner, { title: "Alt", projectId: projectA, parentTaskId: other });
+    assert.equal(res.status, 201);
+    const child = ((await res.json()) as { id: string }).id;
+    const detail = (await (await api("GET", `/api/tasks/${child}`, owner)).json()) as { task: { projectId: string } };
+    assert.equal(detail.task.projectId, String(projectB));
+
+    const task = await createTask(owner, { projectId: projectA, title: "Kendi" });
+    const self = await api("PATCH", `/api/tasks/${task}`, owner, { parentTaskId: task });
+    assert.equal(self.status, 400);
+  });
+
+  test("döngü oluşturan üst iş ataması 400 döner", async () => {
+    const top = await createTask(owner, { projectId: projectA, title: "Döngü üst" });
+    const mid = await createTask(owner, { projectId: projectA, title: "Döngü orta", parentTaskId: top });
+    const res = await api("PATCH", `/api/tasks/${top}`, owner, { parentTaskId: mid });
+    assert.equal(res.status, 400);
+  });
+
+  test("alt işi olan görev silinemez (409), alt işler silinince silinebilir", async () => {
+    const parent = await createTask(owner, { projectId: projectA, title: "Silinecek üst" });
+    const child = await createTask(owner, { projectId: projectA, title: "Silinecek alt", parentTaskId: parent });
+    assert.equal((await api("DELETE", `/api/tasks/${parent}`, owner)).status, 409);
+
+    assert.equal((await api("DELETE", `/api/tasks/${child}`, owner)).status, 204);
+    assert.equal((await api("DELETE", `/api/tasks/${parent}`, owner)).status, 204);
+  });
+
+  test("üst işin faaliyeti değişince alt işler de taşınır", async () => {
+    const parent = await createTask(owner, { projectId: projectA, title: "Taşınacak üst" });
+    const child = await createTask(owner, { projectId: projectA, title: "Taşınacak alt", parentTaskId: parent });
+
+    assert.equal((await api("PATCH", `/api/tasks/${parent}`, owner, { projectId: projectB })).status, 200);
+    const detail = (await (await api("GET", `/api/tasks/${child}`, owner)).json()) as { task: { projectId: string } };
+    assert.equal(detail.task.projectId, String(projectB));
+  });
+
+  test("ara hedef tarihi, başka bir alan güncellenince silinmez", async () => {
+    const task = await createTask(owner, { projectId: projectA, title: "Tarihli" });
+    await api("PATCH", `/api/tasks/${task}`, owner, { targetDate: "2030-01-15" });
+    await api("PATCH", `/api/tasks/${task}`, owner, { title: "Tarihli yeni ad" });
+
+    const detail = (await (await api("GET", `/api/tasks/${task}`, owner)).json()) as { task: { targetDate: string } };
+    assert.equal(detail.task.targetDate, "2030-01-15");
+  });
+
+  test("alt iş üst işin faaliyet ve ekibini miras alır, gönderilen değerleri yok sayar", async () => {
+    const teamId = await createTeam("Miras ekibi");
+    await addMember(teamId, owner);
+    const parent = await createTask(owner, { projectId: projectA, title: "Miras üst", teamId });
+    const child = await createTask(owner, {
+      projectId: projectB,
+      parentTaskId: parent,
+      title: "Miras alt",
+      teamId: null,
+    });
+
+    const detail = (await (await api("GET", `/api/tasks/${child}`, owner)).json()) as {
+      task: { projectId: string; teamId: string | null };
+    };
+    assert.equal(detail.task.projectId, String(projectA));
+    assert.equal(detail.task.teamId, teamId);
+  });
+
+  test("üst işin ekibi değişince alt işlerin ekibi de değişir", async () => {
+    const newTeam = await createTeam("Yeni miras ekibi");
+    await addMember(newTeam, owner);
+    const parent = await createTask(owner, { projectId: projectA, title: "Ekip üst" });
+    const child = await createTask(owner, { projectId: projectA, title: "Ekip alt", parentTaskId: parent });
+
+    assert.equal((await api("PATCH", `/api/tasks/${parent}`, owner, { teamId: newTeam })).status, 200);
+    const detail = (await (await api("GET", `/api/tasks/${child}`, owner)).json()) as {
+      task: { teamId: string | null };
+    };
+    assert.equal(detail.task.teamId, newTeam);
+  });
+
+  test("üst iş ekibe özel yapılırken alt işte ekip dışı atanan biri varsa 409 döner", async () => {
+    const teamId = await createTeam("Yayılım ekibi");
+    await addMember(teamId, owner);
+    const outsider = await createUser("AltIsDisari");
+    const parent = await createTask(owner, { projectId: projectA, title: "Yayılım üst" });
+    const child = await createTask(owner, { projectId: projectA, title: "Yayılım alt", parentTaskId: parent });
+    await query(
+      "INSERT INTO task_assignments (task_id, user_id, role, source, assigned_by) VALUES ($1, $2, 'support', 'claimed', NULL)",
+      [child, outsider],
+    );
+
+    const res = await api("PATCH", `/api/tasks/${parent}`, owner, { teamId, teamOnly: true });
+    assert.equal(res.status, 409);
+  });
+
+  test("faaliyetsiz üst işin alt işi oluşturulabilir ve listelenir", async () => {
+    const parent = await createTask(owner, { title: "Faaliyetsiz üst" });
+    const child = await createTask(owner, { title: "Faaliyetsiz alt", parentTaskId: parent });
+
+    const detail = (await (await api("GET", `/api/tasks/${parent}`, owner)).json()) as {
+      task: { subtasks: { id: string }[] };
+    };
+    assert.deepEqual(detail.task.subtasks.map((s) => s.id), [child]);
+  });
+});
